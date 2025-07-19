@@ -27,3 +27,4 @@ You are a sports analyst. Predict the winner based on the stats.
     )
     result = response.json()
     st.success(result["response"])
+
