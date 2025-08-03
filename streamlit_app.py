@@ -165,19 +165,19 @@ with tab1:
 
     with col1:
         st.subheader("Team 1")
-        team1_name = st.text_input("Team 1 Name", "Team A", key="team1_name")
+        team1_name = st.text_input("Team 1 Name", "", key="team1_name")
         team1_stats = st.text_area(f"Team 1 Stats (e.g., {', '.join(SPORT_STATS[sport]['team_stats'])})", 
                                    "\n".join([f"{stat}: 0" for stat in SPORT_STATS[sport]["team_stats"]]), key="team1_stats")
-        team1_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "0-0", key="team1_recent")
+        team1_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key="team1_recent")
         team1_injuries = st.text_area("Key Injuries", "None", key="team1_injuries")
         team1_home_away = st.selectbox("Home/Away", ["Home", "Away", "Neutral"], key="team1_home_away")
 
     with col2:
         st.subheader("Team 2")
-        team2_name = st.text_input("Team 2 Name", "Team B", key="team2_name")
+        team2_name = st.text_input("Team 2 Name", "", key="team2_name")
         team2_stats = st.text_area(f"Team 2 Stats (e.g., {', '.join(SPORT_STATS[sport]['team_stats'])})", 
                                    "\n".join([f"{stat}: 0" for stat in SPORT_STATS[sport]["team_stats"]]), key="team2_stats")
-        team2_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "0-0", key="team2_recent")
+        team2_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key="team2_recent")
         team2_injuries = st.text_area("Key Injuries", "None", key="team2_injuries")
         team2_home_away = st.selectbox("Home/Away", ["Home", "Away", "Neutral"], key="team2_home_away")
 
@@ -231,14 +231,14 @@ with tab2:
         with st.expander(f"Player {i+1}", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
-                player_name = st.text_input("Player Name", "Player A", key=f"player_name_{i}")
+                player_name = st.text_input("Player Name", "", key=f"player_name_{i}")
                 position = st.selectbox("Position", SPORT_STATS[sport]["player_stats"], key=f"position_{i}")
                 recent_stats = st.text_area(f"Recent Stats (e.g., {', '.join(SPORT_STATS[sport]['player_stats'])})", 
                                            f"{SPORT_STATS[sport]['player_stats'][0]}: 0", key=f"recent_stats_{i}")
             with col2:
                 prop_type = st.selectbox("Prop Type", SPORT_STATS[sport]["player_stats"], key=f"prop_type_{i}")
                 prop_value = st.number_input("Prop Value (e.g., 0.5)", 0.0, 1000.0, 0.0, key=f"prop_value_{i}")
-                opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "Rank: 16", key=f"opp_defense_{i}")
+                opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "", key=f"opp_defense_{i}")
                 injury_status = st.selectbox("Injury Status", ["Healthy", "Questionable", "Out"], key=f"injury_status_{i}")
 
             st.session_state.players[i] = {
@@ -258,7 +258,8 @@ with tab2:
         st.success("\n\n".join(results))
 
     if st.button("Clear Players", key="clear_players"):
-        reset_players()
+        st.session_state.players = [{}]
+        st.rerun()
 
 # Footer
 st.markdown("---")
