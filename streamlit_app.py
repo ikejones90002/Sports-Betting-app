@@ -19,6 +19,14 @@ SPORT_STATS = {
     "Hockey": {"team_stats": ["Goals", "Shots on Goal", "Save %"], "player_stats": ["Goals", "Assists", "Shots on Goal", "Save %"]}
 }
 
+# Initialize session state for form resets
+if "team_form_reset_key" not in st.session_state:
+    st.session_state.team_form_reset_key = 0
+if "player_form_reset_key" not in st.session_state:
+    st.session_state.player_form_reset_key = 0
+if "players" not in st.session_state:
+    st.session_state.players = [{}]
+
 # Tabs for team and player predictions
 tab1, tab2 = st.tabs(["Team Game Prediction", "Player Prop Bets"])
 
@@ -137,33 +145,35 @@ def predict_player_prop(player, sport):
 with tab1:
     st.header("Team Game Prediction")
     
-    # Team form
-    with st.form(key="team_form"):
+    # Team form with dynamic key for resetting
+    with st.form(key=f"team_form_{st.session_state.team_form_reset_key}"):
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("Team 1")
-            team1_name = st.text_input("Team 1 Name", "", key="team1_name")
+            team1_name = st.text_input("Team 1 Name", "", key=f"team1_name_{st.session_state.team_form_reset_key}")
             team1_stats = st.text_area(f"Team 1 Stats (e.g., {', '.join(SPORT_STATS[sport]['team_stats'])})", 
-                                      "\n".join([f"{stat}: 0" for stat in SPORT_STATS[sport]["team_stats"]]), key="team1_stats")
-            team1_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key="team1_recent")
-            team1_injuries = st.text_area("Key Injuries", "None", key="team1_injuries")
-            team1_home_away = st.selectbox("Home/Away", ["Home", "Away", "Neutral"], key="team1_home_away")
+                                      "\n".join([f"{stat}: 0" for stat in SPORT_STATS[sport]["team_stats"]]), 
+                                      key=f"team1_stats_{st.session_state.team_form_reset_key}")
+            team1_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key=f"team1_recent_{st.session_state.team_form_reset_key}")
+            team1_injuries = st.text_area("Key Injuries", "None", key=f"team1_injuries_{st.session_state.team_form_reset_key}")
+            team1_home_away = st.selectbox("Home/Away", ["Home", "Away", "Neutral"], key=f"team1_home_away_{st.session_state.team_form_reset_key}")
         
         with col2:
             st.subheader("Team 2")
-            team2_name = st.text_input("Team 2 Name", "", key="team2_name")
+            team2_name = st.text_input("Team 2 Name", "", key=f"team2_name_{st.session_state.team_form_reset_key}")
             team2_stats = st.text_area(f"Team 2 Stats (e.g., {', '.join(SPORT_STATS[sport]['team_stats'])})", 
-                                      "\n".join([f"{stat}: 0" for stat in SPORT_STATS[sport]["team_stats"]]), key="team2_stats")
-            team2_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key="team2_recent")
-            team2_injuries = st.text_area("Key Injuries", "None", key="team2_injuries")
-            team2_home_away = st.selectbox("Home/Away", ["Home", "Away", "Neutral"], key="team2_home_away")
+                                      "\n".join([f"{stat}: 0" for stat in SPORT_STATS[sport]["team_stats"]]), 
+                                      key=f"team2_stats_{st.session_state.team_form_reset_key}")
+            team2_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key=f"team2_recent_{st.session_state.team_form_reset_key}")
+            team2_injuries = st.text_area("Key Injuries", "None", key=f"team2_injuries_{st.session_state.team_form_reset_key}")
+            team2_home_away = st.selectbox("Home/Away", ["Home", "Away", "Neutral"], key=f"team2_home_away_{st.session_state.team_form_reset_key}")
         
         with st.expander("Game Context"):
-            game_type = st.selectbox("Game Type", ["Regular Season", "Playoffs", "Preseason"], key="game_type")
-            weather = st.selectbox("Weather", ["Clear", "Rain", "Snow", "Windy"], key="weather")
-            rest_days_team1 = st.slider("Days Since Last Game (Team 1)", 1, 14, 7, key="rest_days_team1")
-            rest_days_team2 = st.slider("Days Since Last Game (Team 2)", 1, 14, 7, key="rest_days_team2")
+            game_type = st.selectbox("Game Type", ["Regular Season", "Playoffs", "Preseason"], key=f"game_type_{st.session_state.team_form_reset_key}")
+            weather = st.selectbox("Weather", ["Clear", "Rain", "Snow", "Windy"], key=f"weather_{st.session_state.team_form_reset_key}")
+            rest_days_team1 = st.slider("Days Since Last Game (Team 1)", 1, 14, 7, key=f"rest_days_team1_{st.session_state.team_form_reset_key}")
+            rest_days_team2 = st.slider("Days Since Last Game (Team 2)", 1, 14, 7, key=f"rest_days_team2_{st.session_state.team_form_reset_key}")
         
         # Form buttons
         predict_team = st.form_submit_button("Predict Game Outcome")
@@ -186,34 +196,32 @@ with tab1:
             st.write(f"- {factor}")
     
     if clear_team:
-        st.form_clear("team_form")  # Clears all inputs in the form
+        st.session_state.team_form_reset_key += 1  # Increment to force form reset
+        st.rerun()
 
 # Player Prop Bets Tab
 with tab2:
     st.header("Player Prop Bet Prediction")
     
-    # Initialize session state for players
-    if 'players' not in st.session_state:
-        st.session_state.players = [{}]
-    
     def add_player():
         st.session_state.players.append({})
     
-    # Player form
-    with st.form(key="player_form"):
-        for i, player in enumerate(st.session_state.players):
+    # Player form with dynamic key for resetting
+    with st.form(key=f"player_form_{st.session_state.player_form_reset_key}"):
+        for i in range(len(st.session_state.players)):
             with st.expander(f"Player {i+1}", expanded=True):
                 col1, col2 = st.columns(2)
                 with col1:
-                    player_name = st.text_input("Player Name", "", key=f"player_name_{i}")
-                    position = st.selectbox("Position", SPORT_STATS[sport]["player_stats"], key=f"position_{i}")
+                    player_name = st.text_input("Player Name", "", key=f"player_name_{i}_{st.session_state.player_form_reset_key}")
+                    position = st.selectbox("Position", SPORT_STATS[sport]["player_stats"], key=f"position_{i}_{st.session_state.player_form_reset_key}")
                     recent_stats = st.text_area(f"Recent Stats (e.g., {', '.join(SPORT_STATS[sport]['player_stats'])})", 
-                                               f"{SPORT_STATS[sport]['player_stats'][0]}: 0", key=f"recent_stats_{i}")
+                                               f"{SPORT_STATS[sport]['player_stats'][0]}: 0", 
+                                               key=f"recent_stats_{i}_{st.session_state.player_form_reset_key}")
                 with col2:
-                    prop_type = st.selectbox("Prop Type", SPORT_STATS[sport]["player_stats"], key=f"prop_type_{i}")
-                    prop_value = st.number_input("Prop Value (e.g., 0.5)", 0.0, 1000.0, 0.0, key=f"prop_value_{i}")
-                    opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "Rank: ", key=f"opp_defense_{i}")
-                    injury_status = st.selectbox("Injury Status", ["Healthy", "Questionable", "Out"], key=f"injury_status_{i}")
+                    prop_type = st.selectbox("Prop Type", SPORT_STATS[sport]["player_stats"], key=f"prop_type_{i}_{st.session_state.player_form_reset_key}")
+                    prop_value = st.number_input("Prop Value (e.g., 0.5)", 0.0, 1000.0, 0.0, key=f"prop_value_{i}_{st.session_state.player_form_reset_key}")
+                    opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "Rank: 0", key=f"opp_defense_{i}_{st.session_state.player_form_reset_key}")
+                    injury_status = st.selectbox("Injury Status", ["Healthy", "Questionable", "Out"], key=f"injury_status_{i}_{st.session_state.player_form_reset_key}")
                 
                 st.session_state.players[i] = {
                     "name": player_name, "position": position, "recent_stats": recent_stats,
@@ -240,11 +248,11 @@ with tab2:
     
     if clear_players:
         st.session_state.players = [{}]
-        st.form_clear("player_form")  # Clears all inputs in the form
+        st.session_state.player_form_reset_key += 1  # Increment to force form reset
         st.rerun()
 
 # Footer
 st.markdown("---")
 st.write("Made with ❤️ by Isaac Jones")
-st.write("This app is for entertainment purposes only. Please gamble responsibly.")
+st.write("This app is for educational purposes only. Please gamble responsibly.")
 st.write("Powered by xAI Grok 3 | Statistical Algorithm")
