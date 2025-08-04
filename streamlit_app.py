@@ -1,6 +1,10 @@
 import streamlit as st
 import numpy as np
 import re
+from achievements import update_streak
+from avery import avery_commentary
+from data import nba_players, nfl_players, mlb_players, nhl_players
+from modules import basketball_predictor, football_predictor, baseball_predictor, hockey_predictor
 
 # Set page title and layout
 st.set_page_config(page_title="🏀⚾🏒🏈 Multi-Sport Predictor", layout="wide")
@@ -11,37 +15,43 @@ st.title("🏀⚾🏒🏈 Multi-Sport Predictor")
 # Sport selection
 sport = st.selectbox("Select Sport", ["Football", "Baseball", "Basketball", "Hockey"], key="sport")
 
-# Define sport-specific stats and positions
+# Define sport-specific stats, positions, and players
 SPORT_STATS = {
     "Football": {
         "team_stats": ["Points", "Yards", "Turnovers"],
         "player_positions": ["QB", "RB", "WR", "TE", "K"],
-        "player_stats": ["Passing Yards", "Rushing Yards", "Receptions", "Touchdowns"]
+        "player_stats": ["Passing Yards", "Rushing Yards", "Receptions", "Touchdowns"],
+        "players": nfl_players
     },
     "Baseball": {
         "team_stats": ["Runs", "Hits", "Errors"],
         "player_positions": ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"],
-        "player_stats": ["Batting Average", "Home Runs", "RBIs", "Pitcher ERA"]
+        "player_stats": ["Batting Average", "Home Runs", "RBIs", "Pitcher ERA"],
+        "players": mlb_players
     },
     "Basketball": {
         "team_stats": ["Points", "Rebounds", "Assists", "Field Goal %"],
         "player_positions": ["PG", "SG", "SF", "PF", "C"],
-        "player_stats": ["Points", "Rebounds", "Assists", "Field Goal %"]
+        "player_stats": ["Points", "Rebounds", "Assists", "Field Goal %"],
+        "players": nba_players
     },
     "Hockey": {
         "team_stats": ["Goals", "Shots on Goal", "Save %"],
         "player_positions": ["C", "LW", "RW", "D", "G"],
-        "player_stats": ["Goals", "Assists", "Shots on Goal", "Save %"]
+        "player_stats": ["Goals", "Assists", "Shots on Goal", "Save %"],
+        "players": nhl_players
     }
 }
 
-# Initialize session state for form resets
+# Initialize session state
 if "team_form_reset_key" not in st.session_state:
     st.session_state.team_form_reset_key = 0
 if "player_form_reset_key" not in st.session_state:
     st.session_state.player_form_reset_key = 0
 if "players" not in st.session_state:
     st.session_state.players = [{}]
+if "streaks" not in st.session_state:
+    st.session_state.streaks = {}
 
 # Function to parse stats from text_area
 def parse_stats(stats_text, sport):
@@ -54,44 +64,13 @@ def parse_stats(stats_text, sport):
     except:
         return {stat: 0 for stat in SPORT_STATS[sport]["team_stats"]}
 
-# Function to parse recent performance (e.g., "3-2" → 0.6 win rate)
+# Function to parse recent performance
 def parse_recent_performance(record):
     try:
         wins, losses = map(int, record.split("-"))
         return wins / (wins + losses) if (wins + losses) > 0 else 0.5
     except:
         return 0.5
-
-# Function to parse player stats
-def parse_player_stats(stats_text, sport):
-    try:
-        match = re.search(r"(\d+\.?\d*)", stats_text)
-        return float(match.group(1)) if match else 0
-    except:
-        return 0
-
-# Betting calculation
-def calculate_bet_outcome(bet_type, stake, odds):
-    if stake <= 0:
-        return {"error": "Stake must be greater than 0", "profit": 0, "total_return": 0}
-    if bet_type == "Moneyline":
-        if odds == 0:
-            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
-        if odds > 0:
-            profit = stake * (odds / 100)
-        else:
-            profit = stake / (abs(odds) / 100)
-    else:  # Point Spread or Over/Under
-        if odds == 0:
-            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
-        profit = stake * (100 / abs(odds))
-    profit = round(profit, 2)
-    total_return = round(stake + profit, 2)
-    return {
-        "profit": profit,
-        "total_return": total_return,
-        "details": f"{bet_type} bet: ${stake} at {odds:+} odds"
-    }
 
 # Team Prediction Algorithm
 def predict_team_outcome(team1_data, team2_data, sport):
@@ -153,36 +132,28 @@ def predict_team_outcome(team1_data, team2_data, sport):
     
     return f"{winner} wins {predicted_score1}-{predicted_score2}", factors
 
-# Player Prop Prediction Algorithm
-def predict_player_prop(player, sport):
-    stat_value = parse_player_stats(player["recent_stats"], sport)
-    try:
-        def_rank = float(re.search(r"Rank: (\d+)", player["opp_defense"]).group(1))
-    except:
-        def_rank = 16
-    
-    likelihood = stat_value * 0.5 + (32 - def_rank) * 0.3
-    if player["injury_status"] == "Out":
-        likelihood *= 0.0
-    elif player["injury_status"] == "Questionable":
-        likelihood *= 0.7
-    
-    outcome = "Over" if likelihood > player["prop_value"] else "Under"
-    confidence = abs(likelihood - player["prop_value"]) / player["prop_value"] * 100 if player["prop_value"] != 0 else 0
-    
-    bet_result = calculate_bet_outcome(player["bet_type"], player["stake"], player["odds"])
-    if "error" in bet_result:
-        bet_info = bet_result["error"]
-    else:
-        bet_info = f"{bet_result['details']}, Profit: ${bet_result['profit']}, Total Return: ${bet_result['total_return']}"
-    
-    factors = [
-        f"Recent Stats: {player['recent_stats'] or 'None'}",
-        f"Opposing Defense: {player['opp_defense']}",
-        f"Injury Status: {player['injury_status']}",
-        f"Bet: {bet_info}"
-    ]
-    return f"{player['name']} likely to hit {outcome} {player['prop_value']} ({confidence:.1f}% confidence)", factors
+# Betting calculation
+def calculate_bet_outcome(bet_type, stake, odds):
+    if stake <= 0:
+        return {"error": "Stake must be greater than 0", "profit": 0, "total_return": 0}
+    if bet_type == "Moneyline":
+        if odds == 0:
+            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
+        if odds > 0:
+            profit = stake * (odds / 100)
+        else:
+            profit = stake / (abs(odds) / 100)
+    else:  # Point Spread or Over/Under
+        if odds == 0:
+            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
+        profit = stake * (100 / abs(odds))
+    profit = round(profit, 2)
+    total_return = round(stake + profit, 2)
+    return {
+        "profit": profit,
+        "total_return": total_return,
+        "details": f"{bet_type} bet: ${stake} at {odds:+} odds"
+    }
 
 # Define tabs
 tab1, tab2 = st.tabs(["Team Game Prediction", "Player Prop Bets"])
@@ -259,7 +230,7 @@ with tab2:
             with st.expander(f"Player {i+1}", expanded=True):
                 col1, col2 = st.columns(2)
                 with col1:
-                    player_name = st.text_input("Player Name", "", key=f"player_name_{i}_{st.session_state.player_form_reset_key}")
+                    player_name = st.selectbox("Player Name", [""] + SPORT_STATS[sport]["players"], key=f"player_name_{i}_{st.session_state.player_form_reset_key}")
                     position = st.selectbox("Position", [""] + SPORT_STATS[sport]["player_positions"], key=f"position_{i}_{st.session_state.player_form_reset_key}")
                     recent_stats = st.text_area(f"Recent Stats (e.g., {', '.join(SPORT_STATS[sport]['player_stats'])})", 
                                                "", key=f"recent_stats_{i}_{st.session_state.player_form_reset_key}")
@@ -270,12 +241,34 @@ with tab2:
                     stake = st.number_input("Stake ($)", min_value=0.0, value=0.0, step=0.01, key=f"stake_{i}_{st.session_state.player_form_reset_key}")
                     opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "Rank: 0", key=f"opp_defense_{i}_{st.session_state.player_form_reset_key}")
                     injury_status = st.selectbox("Injury Status", ["", "Healthy", "Questionable", "Out"], key=f"injury_status_{i}_{st.session_state.player_form_reset_key}")
+                    
+                    # Sport-specific predictor
+                    if sport == "Basketball":
+                        projected_key = f"projected_points_{i}_{st.session_state.player_form_reset_key}"
+                        line_key = f"set_line_{i}_{st.session_state.player_form_reset_key}"
+                        projected = st.slider("Projected Points", 0, 50, 0, key=projected_key)
+                        line = st.slider("Set Line", 0, 50, 0, key=line_key)
+                    elif sport == "Football":
+                        projected_key = f"projected_yards_{i}_{st.session_state.player_form_reset_key}"
+                        line_key = f"set_line_{i}_{st.session_state.player_form_reset_key}"
+                        projected = st.slider("Projected Yards", 0, 400, 0, key=projected_key)
+                        line = st.slider("Set Line", 0, 400, 0, key=line_key)
+                    elif sport == "Baseball":
+                        projected_key = f"projected_hr_{i}_{st.session_state.player_form_reset_key}"
+                        line_key = f"set_line_{i}_{st.session_state.player_form_reset_key}"
+                        projected = st.slider("Projected Home Runs", 0, 5, 0, key=projected_key)
+                        line = st.slider("Set Line", 0, 5, 0, key=line_key)
+                    else:  # Hockey
+                        projected_key = f"projected_goals_{i}_{st.session_state.player_form_reset_key}"
+                        line_key = f"set_line_{i}_{st.session_state.player_form_reset_key}"
+                        projected = st.slider("Projected Goals", 0, 5, 0, key=projected_goals)
+                        line = st.slider("Set Line", 0, 5, 0, key=line_key)
                 
                 st.session_state.players[i] = {
                     "name": player_name, "position": position, "recent_stats": recent_stats,
                     "prop_type": prop_type, "bet_type": bet_type, "odds": odds, "stake": stake,
                     "opp_defense": opp_defense, "injury_status": injury_status or "Healthy",
-                    "prop_value": stake
+                    "projected": projected, "line": line
                 }
         
         add_player_btn = st.form_submit_button("Add Player")
@@ -292,8 +285,39 @@ with tab2:
             if not player["name"] or player["prop_type"] == "" or player["position"] == "" or player["bet_type"] == "":
                 st.error(f"Please fill in all fields for Player {st.session_state.players.index(player) + 1} (Name, Position, Prop Type, Bet Type).")
                 break
-            prediction, factors = predict_player_prop(player, sport)
-            results.append(f"{prediction}\nKey Factors:\n" + "\n".join([f"- {f}" for f in factors]))
+            # Call sport-specific predictor
+            if sport == "Basketball":
+                outcome = basketball_predictor()
+            elif sport == "Football":
+                outcome = football_predictor()
+            elif sport == "Baseball":
+                outcome = baseball_predictor()
+            else:  # Hockey
+                outcome = hockey_predictor()
+            
+            # Update streak
+            update_streak(sport, outcome)
+            
+            # Get Avery commentary
+            commentary = avery_commentary(sport, outcome)
+            
+            # Calculate bet outcome
+            bet_result = calculate_bet_outcome(player["bet_type"], player["stake"], player["odds"])
+            if "error" in bet_result:
+                bet_info = bet_result["error"]
+            else:
+                bet_info = f"{bet_result['details']}, Profit: ${bet_result['profit']}, Total Return: ${bet_result['total_return']}"
+            
+            factors = [
+                f"Recent Stats: {player['recent_stats'] or 'None'}",
+                f"Opposing Defense: {player['opp_defense']}",
+                f"Injury Status: {player['injury_status']}",
+                f"Bet: {bet_info}",
+                f"Projected {player['prop_type']}: {player['projected']}",
+                f"Set Line: {player['line']}"
+            ]
+            results.append(f"{player['name']} likely to hit {outcome} {player['line']} ({commentary})\nKey Factors:\n" + "\n".join([f"- {f}" for f in factors]))
+        
         if results:
             st.success("\n\n".join(results))
     
@@ -304,6 +328,4 @@ with tab2:
 
 # Footer
 st.markdown("---")
-st.write("Made with ❤️ by Isaac Jones")
-st.write("For educational purposes only. Please gamble responsibly.")
 st.write("Powered by xAI Grok 3 | Statistical Algorithm")
