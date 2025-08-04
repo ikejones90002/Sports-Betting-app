@@ -5,8 +5,16 @@ import re
 # Set page title and layout
 st.set_page_config(page_title="Sports BetTracker", layout="wide")
 
-# Display logo
-st.image("sports-bettracker-logo.png", width=200, caption="Sports BetTracker App")
+# Display logo (centered)
+st.markdown(
+    """
+    <div style="display: flex; justify-content: center;">
+        <img src="sports-bettracker-logo.png" width="200">
+    </div>
+    <p style="text-align: center;">Sports BetTracker - Track the Action. Bet Smarter.</p>
+    """,
+    unsafe_allow_html=True
+)
 
 # Title
 st.title("🏀⚾🏒🏈 Sports BetTracker")
@@ -106,6 +114,7 @@ def predict_team_outcome(team1_data, team2_data, sport):
     weights = {"main": 0.4, "secondary": 0.3, "tertiary": 0.2, "recent": 0.1, "home_away": 0.05}
     stat_keys = SPORT_STATS[sport]["team_stats"]
     
+    # Base scores
     t1_score = t1_stats[stat_keys[0]] * weights["main"]
     t2_score = t2_stats[stat_keys[0]] * weights["main"]
     
@@ -138,18 +147,48 @@ def predict_team_outcome(team1_data, team2_data, sport):
     t1_score *= (1 + 0.02 * rest_diff)
     t2_score *= (1 - 0.02 * rest_diff)
     
-    score_diff = abs(t1_score - t2_score) / 2
+    # Monte Carlo simulation for win probability
+    simulations = 10000
+    t1_wins = 0
+    score_diffs = []
     main_stat = stat_keys[0]
+    
+    for _ in range(simulations):
+        # Add randomness to simulate variability
+        t1_sim_score = np.random.normal(t1_score, t1_score * 0.1)  # 10% standard deviation
+        t2_sim_score = np.random.normal(t2_score, t2_score * 0.1)
+        score_diffs.append(t1_sim_score - t2_sim_score)
+        if t1_sim_score > t2_sim_score:
+            t1_wins += 1
+    
+    # Calculate win probability
+    pwp_team1 = (t1_wins / simulations) * 100
+    pwp_team2 = 100 - pwp_team1
+    
+    # Calculate 95% confidence interval
+    mean_diff = np.mean(score_diffs)
+    std_diff = np.std(score_diffs)
+    ci_lower = mean_diff - 1.96 * std_diff / np.sqrt(simulations)
+    ci_upper = mean_diff + 1.96 * std_diff / np.sqrt(simulations)
+    ci_lower_pwp = (1 / (1 + np.exp(-ci_lower))) * 100  # Convert to probability
+    ci_upper_pwp = (1 / (1 + np.exp(-ci_upper))) * 100
+    
+    # Predicted score
+    score_diff = abs(t1_score - t2_score) / 2
     predicted_score1 = round(t1_stats[main_stat] + score_diff if t1_score > t2_score else t1_stats[main_stat] - score_diff)
     predicted_score2 = round(t2_stats[main_stat] - score_diff if t1_score > t2_score else t2_stats[main_stat] + score_diff)
     
     winner = team1_data["name"] if t1_score > t2_score else team2_data["name"]
+    win_prob = pwp_team1 if t1_score > t2_score else pwp_team2
+    win_team = team1_data["name"] if t1_score > t2_score else team2_data["name"]
+    
     factors = [
         f"{main_stat} (Team 1: {t1_stats[main_stat]}, Team 2: {t2_stats[main_stat]})",
         f"Recent Performance (Team 1: {t1_recent:.2f}, Team 2: {t2_recent:.2f})",
         f"Injuries: {team1_data['injuries']} vs. {team2_data['injuries']}",
         f"Home/Away: {team1_data['home_away']} vs. {team2_data['home_away']}",
-        f"Rest Days: {team1_data['rest_days']} vs. {team2_data['rest_days']}"
+        f"Rest Days: {team1_data['rest_days']} vs. {team2_data['rest_days']}",
+        f"Win Probability: {win_team} {win_prob:.1f}% (95% CI: {min(ci_lower_pwp, ci_upper_pwp):.1f}% - {max(ci_lower_pwp, ci_upper_pwp):.1f}%)"
     ]
     for stat in stat_keys[1:]:
         factors.append(f"{stat} (Team 1: {t1_stats[stat]}, Team 2: {t2_stats[stat]})")
