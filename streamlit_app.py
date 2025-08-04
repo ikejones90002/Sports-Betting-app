@@ -43,9 +43,6 @@ if "player_form_reset_key" not in st.session_state:
 if "players" not in st.session_state:
     st.session_state.players = [{}]
 
-# Tabs for team and player predictions
-tab1, tab2 = st.tabs(["Team Game Prediction", "Player Prop Bets"])
-
 # Function to parse stats from text_area
 def parse_stats(stats_text, sport):
     stats = {}
@@ -72,6 +69,29 @@ def parse_player_stats(stats_text, sport):
         return float(match.group(1)) if match else 0
     except:
         return 0
+
+# Betting calculation
+def calculate_bet_outcome(bet_type, stake, odds):
+    if stake <= 0:
+        return {"error": "Stake must be greater than 0", "profit": 0, "total_return": 0}
+    if bet_type == "Moneyline":
+        if odds == 0:
+            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
+        if odds > 0:
+            profit = stake * (odds / 100)
+        else:
+            profit = stake / (abs(odds) / 100)
+    else:  # Point Spread or Over/Under
+        if odds == 0:
+            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
+        profit = stake * (100 / abs(odds))
+    profit = round(profit, 2)
+    total_return = round(stake + profit, 2)
+    return {
+        "profit": profit,
+        "total_return": total_return,
+        "details": f"{bet_type} bet: ${stake} at {odds:+} odds"
+    }
 
 # Team Prediction Algorithm
 def predict_team_outcome(team1_data, team2_data, sport):
@@ -150,10 +170,17 @@ def predict_player_prop(player, sport):
     outcome = "Over" if likelihood > player["prop_value"] else "Under"
     confidence = abs(likelihood - player["prop_value"]) / player["prop_value"] * 100 if player["prop_value"] != 0 else 0
     
+    bet_result = calculate_bet_outcome(player["bet_type"], player["stake"], player["odds"])
+    if "error" in bet_result:
+        bet_info = bet_result["error"]
+    else:
+        bet_info = f"{bet_result['details']}, Profit: ${bet_result['profit']}, Total Return: ${bet_result['total_return']}"
+    
     factors = [
-        f"Recent Stats: {player['recent_stats']}",
+        f"Recent Stats: {player['recent_stats'] or 'None'}",
         f"Opposing Defense: {player['opp_defense']}",
-        f"Injury Status: {player['injury_status']}"
+        f"Injury Status: {player['injury_status']}",
+        f"Bet: {bet_info}"
     ]
     return f"{player['name']} likely to hit {outcome} {player['prop_value']} ({confidence:.1f}% confidence)", factors
 
@@ -232,18 +259,20 @@ with tab2:
                     player_name = st.text_input("Player Name", "", key=f"player_name_{i}_{st.session_state.player_form_reset_key}")
                     position = st.selectbox("Position", [""] + SPORT_STATS[sport]["player_positions"], key=f"position_{i}_{st.session_state.player_form_reset_key}")
                     recent_stats = st.text_area(f"Recent Stats (e.g., {', '.join(SPORT_STATS[sport]['player_stats'])})", 
-                                               f"{SPORT_STATS[sport]['player_stats'][0]}: 0", 
-                                               key=f"recent_stats_{i}_{st.session_state.player_form_reset_key}")
+                                               "", key=f"recent_stats_{i}_{st.session_state.player_form_reset_key}")
                 with col2:
                     prop_type = st.selectbox("Prop Type", [""] + SPORT_STATS[sport]["player_stats"], key=f"prop_type_{i}_{st.session_state.player_form_reset_key}")
-                    prop_value = st.number_input("Prop Value (e.g., 0.5)", 0.0, 1000.0, 0.0, key=f"prop_value_{i}_{st.session_state.player_form_reset_key}")
+                    bet_type = st.selectbox("Bet Type", ["", "Moneyline", "Point Spread", "Over/Under"], key=f"bet_type_{i}_{st.session_state.player_form_reset_key}")
+                    odds = st.number_input("Odds (e.g., +150 or -110)", min_value=-10000, max_value=10000, value=0, key=f"odds_{i}_{st.session_state.player_form_reset_key}")
+                    stake = st.number_input("Stake ($)", min_value=0.0, value=0.0, step=0.01, key=f"stake_{i}_{st.session_state.player_form_reset_key}")
                     opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "Rank: 0", key=f"opp_defense_{i}_{st.session_state.player_form_reset_key}")
                     injury_status = st.selectbox("Injury Status", ["", "Healthy", "Questionable", "Out"], key=f"injury_status_{i}_{st.session_state.player_form_reset_key}")
                 
                 st.session_state.players[i] = {
                     "name": player_name, "position": position, "recent_stats": recent_stats,
-                    "prop_type": prop_type, "prop_value": prop_value, "opp_defense": opp_defense,
-                    "injury_status": injury_status or "Healthy"
+                    "prop_type": prop_type, "bet_type": bet_type, "odds": odds, "stake": stake,
+                    "opp_defense": opp_defense, "injury_status": injury_status or "Healthy",
+                    "prop_value": stake  # Use stake as prop_value for prediction
                 }
         
         add_player_btn = st.form_submit_button("Add Player")
@@ -257,8 +286,8 @@ with tab2:
     if predict_props:
         results = []
         for player in st.session_state.players:
-            if not player["name"] or player["prop_type"] == "" or player["position"] == "":
-                st.error(f"Please fill in all fields for Player {st.session_state.players.index(player) + 1} (Name, Position, Prop Type).")
+            if not player["name"] or player["prop_type"] == "" or player["position"] == "" or player["bet_type"] == "":
+                st.error(f"Please fill in all fields for Player {st.session_state.players.index(player) + 1} (Name, Position, Prop Type, Bet Type).")
                 break
             prediction, factors = predict_player_prop(player, sport)
             results.append(f"{prediction}\nKey Factors:\n" + "\n".join([f"- {f}" for f in factors]))
@@ -272,6 +301,4 @@ with tab2:
 
 # Footer
 st.markdown("---")
-st.write("Made with ❤️ by Isaac Jones")
-st.write("For educational purposes only. Use responsibly.")
 st.write("Powered by xAI Grok 3 | Statistical Algorithm")
