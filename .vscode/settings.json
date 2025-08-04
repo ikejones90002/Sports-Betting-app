@@ -1,6 +1,9 @@
 {
-    "wolf.disableHotModeWarning": true,
-    "cSpell.words": [
-        "numpy"
-    ]
+  "wolf.disableHotModeWarning": true,
+  "cSpell.words": [
+    "numpy"
+  ],
+  "python.analysis.typeEvaluation.deprecateTypingAliases": true,
+  "python.analysis.supportAllPythonDocuments": true,
+  "python.pythonPath": ".venv\\Scripts\\python.exe"
 }
