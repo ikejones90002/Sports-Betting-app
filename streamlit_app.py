@@ -184,6 +184,9 @@ def predict_player_prop(player, sport):
     ]
     return f"{player['name']} likely to hit {outcome} {player['prop_value']} ({confidence:.1f}% confidence)", factors
 
+# Define tabs
+tab1, tab2 = st.tabs(["Team Game Prediction", "Player Prop Bets"])
+
 # Team Prediction Tab
 with tab1:
     st.header("Team Game Prediction")
@@ -272,7 +275,7 @@ with tab2:
                     "name": player_name, "position": position, "recent_stats": recent_stats,
                     "prop_type": prop_type, "bet_type": bet_type, "odds": odds, "stake": stake,
                     "opp_defense": opp_defense, "injury_status": injury_status or "Healthy",
-                    "prop_value": stake  # Use stake as prop_value for prediction
+                    "prop_value": stake
                 }
         
         add_player_btn = st.form_submit_button("Add Player")
@@ -301,4 +304,6 @@ with tab2:
 
 # Footer
 st.markdown("---")
+st.write("Made with ❤️ by Isaac Jones")
+st.write("For educational purposes only. Please gamble responsibly.")
 st.write("Powered by xAI Grok 3 | Statistical Algorithm")
