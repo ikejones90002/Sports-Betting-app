@@ -290,13 +290,13 @@ with tab2:
                 break
             # Call sport-specific predictor
             if sport == "Basketball":
-                outcome = basketball_predictor()
+                outcome = basketball_predictor(player)
             elif sport == "Football":
-                outcome = football_predictor()
+                outcome = football_predictor(player)
             elif sport == "Baseball":
-                outcome = baseball_predictor()
+                outcome = baseball_predictor(player)
             else:  # Hockey
-                outcome = hockey_predictor()
+                outcome = hockey_predictor(player)
             
             # Update streak
             update_streak(sport, outcome)

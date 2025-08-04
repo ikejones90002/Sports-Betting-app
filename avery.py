@@ -1,13 +1,46 @@
 import random
+from typing import List, Dict, Union
 
-def get_avery_mood():
-    moods = ["playful", "serious", "mysterious", "spiritual"]
+def get_avery_mood() -> str:
+    """
+    Select a random mood for Avery's commentary.
+
+    Returns:
+        str: One of 'playful', 'serious', 'mysterious', or 'spiritual'.
+    """
+    moods: List[str] = ["playful", "serious", "mysterious", "spiritual"]
     return random.choice(moods)
 
-def avery_commentary(sport, outcome):
+def avery_commentary(sport: str, outcome: str) -> str:
+    """
+    Generate Avery's commentary based on sport, outcome, and random mood.
+
+    Args:
+        sport (str): The sport (e.g., 'Basketball', 'Football', 'Baseball', 'Hockey').
+        outcome (str): The prediction outcome ('OVER', 'UNDER', 'PUSH').
+
+    Returns:
+        str: A commentary string based on the sport, outcome, and Avery's mood.
+
+    Raises:
+        ValueError: If sport or outcome is invalid.
+    """
+    valid_sports = ["Basketball", "Football", "Baseball", "Hockey"]
+    valid_outcomes = ["OVER", "UNDER", "PUSH"]
+
+    # Normalize inputs
+    sport = sport.capitalize()
+    outcome = outcome.upper()
+
+    # Validate inputs
+    if sport not in valid_sports:
+        raise ValueError(f"Invalid sport: {sport}. Must be one of {valid_sports}.")
+    if outcome not in valid_outcomes:
+        raise ValueError(f"Invalid outcome: {outcome}. Must be one of {valid_outcomes}.")
+
     mood = get_avery_mood()
 
-    commentary = {
+    commentary: Dict[str, Dict[str, Dict[str, str]]] = {
         "Basketball": {
             "OVER": {
                 "playful": "🔥 Avery laughs: 'Buckets on buckets—should’ve doubled the line!'",
@@ -90,5 +123,4 @@ def avery_commentary(sport, outcome):
         }
     }
 
-    # Fallback if the mood or sport/outcome isn't defined
-    return commentary.get(sport, {}).get(outcome, {}).get(mood, "🤔 Avery's flipping through his riddlebook...")
+    return commentary[sport][outcome][mood]
