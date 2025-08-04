@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st # type: ignore
 import re
 from achievements import update_streak
 from avery import avery_commentary
