@@ -5,25 +5,8 @@ import re
 # Set page title and layout
 st.set_page_config(page_title="Sports BetTracker", layout="wide")
 
-with st.container():
-    st.markdown(
-        """
-        <style>
-        .centered-image {
-            display: flex;
-            justify-content: center;
-        }
-        .centered-caption {
-            text-align: center;
-        }
-        </style>
-        <div class="centered-image">
-            <img src="sports-bettracker-logo.png" width="200">
-        </div>
-        <p class="centered-caption">Sports BetTracker - Track the Action. Bet Smarter.</p>
-        """,
-        unsafe_allow_html=True
-    )
+# Display logo
+st.image("sports-bettracker-logo.png", width=200, caption="Sports BetTracker - Track the Action. Bet Smarter.")
 
 # Title
 st.title("🏀⚾🏒🏈 Sports BetTracker")
