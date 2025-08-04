@@ -10,7 +10,7 @@ from modules import basketball_predictor, football_predictor, baseball_predictor
 st.set_page_config(page_title="Sports BetTracker", layout="wide")
 
 # Display logo
-st.image("sports_bettracker_logo.png", width=200, caption="Sports BetTracker Logo")
+st.image("sports-bettracker-logo.png", width=200, caption="Sports BetTracker Logo")
 
 # Title
 st.title("🏀⚾🏒🏈 Sports BetTracker")
