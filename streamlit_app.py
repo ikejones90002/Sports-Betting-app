@@ -7,10 +7,13 @@ from data import nba_players, nfl_players, mlb_players, nhl_players
 from modules import basketball_predictor, football_predictor, baseball_predictor, hockey_predictor
 
 # Set page title and layout
-st.set_page_config(page_title="🏀⚾🏒🏈 Multi-Sport Predictor", layout="wide")
+st.set_page_config(page_title="Sports BetTracker", layout="wide")
+
+# Display logo
+st.image("sports_bettracker_logo.png", width=200, caption="Sports BetTracker Logo")
 
 # Title
-st.title("🏀⚾🏒🏈 Multi-Sport Predictor")
+st.title("🏀⚾🏒🏈 Sports BetTracker")
 
 # Sport selection
 sport = st.selectbox("Select Sport", ["Football", "Baseball", "Basketball", "Hockey"], key="sport")
@@ -328,4 +331,6 @@ with tab2:
 
 # Footer
 st.markdown("---")
+st.write("Developed with ❤️ by the Sports BetTracker Team")
+st.write("For educational purposes only. Please gamble responsibly.")
 st.write("Powered by xAI Grok 3 | Statistical Algorithm")
