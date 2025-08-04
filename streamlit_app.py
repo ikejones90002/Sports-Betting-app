@@ -6,7 +6,7 @@ import re
 st.set_page_config(page_title="Sports BetTracker", layout="wide")
 
 # Display logo
-st.image("sports_bettracker_logo.png", width=200, caption="Sports BetTracker App")
+st.image("sports-bettracker-logo.png", width=200, caption="Sports BetTracker App")
 
 # Title
 st.title("🏀⚾🏒🏈 Sports BetTracker")
