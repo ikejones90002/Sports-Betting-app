@@ -1,12 +1,12 @@
-import streamlit as st # st. ig
-import numpy as np
+import streamlit as st # type: ignore
+import numpy as np # type: ignore
 import re
 
 # Set page title and layout
 st.set_page_config(page_title="Sports BetTracker", layout="wide")
 
 # Display logo
-st.image("sports_bettracker_logo.png", width=200, caption="Sports BetTracker Logo")
+st.image("sports_bettracker_logo.png", width=200, caption="Sports BetTracker App")
 
 # Title
 st.title("🏀⚾🏒🏈 Sports BetTracker")
@@ -160,7 +160,7 @@ def predict_team_outcome(team1_data, team2_data, sport):
 def predict_player_prop(player, sport):
     stat_value = parse_player_stats(player["recent_stats"], sport)
     try:
-        def_rank = float(re.search(r"Rank: (\d+)", player["opp_defense"]).group(1))
+        def_rank = float(re.search(r"Rank: (\d+)", player["opp_defense"]).group(1)) # type: ignore
     except:
         def_rank = 16
     
@@ -307,6 +307,5 @@ with tab2:
 
 # Footer
 st.markdown("---")
-st.write("Made with ❤️ by Sports BetTracker Team | &copy; 2025 103 Software Solutions LLC")
-st.write("For educational purposes only. Please gamble responsibly.")
+st.write("Made with ❤️ by The Sports BetTracker Team | &copy; 2025 103 Software Solutions LLC")
 st.write("Powered by xAI Grok 3 | Statistical Algorithm")
