@@ -261,7 +261,7 @@ with tab2:
                     else:  # Hockey
                         projected_key = f"projected_goals_{i}_{st.session_state.player_form_reset_key}"
                         line_key = f"set_line_{i}_{st.session_state.player_form_reset_key}"
-                        projected = st.slider("Projected Goals", 0, 5, 0, key=projected_goals)
+                        projected = st.slider("Projected Goals", 0, 5, 0, key=projected_key)
                         line = st.slider("Set Line", 0, 5, 0, key=line_key)
                 
                 st.session_state.players[i] = {

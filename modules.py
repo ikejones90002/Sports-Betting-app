@@ -2,6 +2,17 @@ import streamlit as st
 from utils import show_bar_chart
 from data import nba_players, nfl_players, mlb_players, nhl_players
 
+def compare_projection(projected, line):
+    if projected > line:
+        st.success("✅ OVER Projected")
+        return "OVER"
+    elif projected < line:
+        st.error("❌ UNDER Projected")
+        return "UNDER"
+    else:
+        st.warning("🟨 Push")
+        return "PUSH"
+
 def basketball_predictor():
     st.subheader("🏀 Basketball Predictor")
     player = st.selectbox("Player", nba_players)
