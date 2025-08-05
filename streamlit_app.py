@@ -29,7 +29,6 @@ with st.expander("How to Use Sports BetTracker"):
       - Requires at least two players with complete prop data (Name, Position, Prop Type, Over/Under) and non-zero odds.
       - Enter a single stake for the combined parlay bet. All legs must succeed to win; if any leg loses, the parlay loses.
       - Click "Predict Same Game Parlay" for combined probability and payout. Payout grows with more legs due to multiplied odds.
-      - **Parlay Assumption**: The parlay probability assumes independent outcomes for simplicity. If you want to account for correlations between players, contact support for a future enhancement.
 
     - **Understanding Output**:
       - **Win Probability**: The % chance a team or parlay wins, based on 10,000 simulations (e.g., 62.3%).
