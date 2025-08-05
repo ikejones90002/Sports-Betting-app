@@ -13,11 +13,7 @@ st.title("🏀⚾🏒🏈 Sports BetTracker")
 
 # How to Use Guide
 with st.expander("How to Use Sports BetTracker"):
-
- # Display logo
-    st.image("sports-bettracker-logo.png", width=200, caption="Sports BetTracker - Track the Action. Bet Smarter.")
-
-st.markdown("""
+    st.markdown("""
     **Quick Guide to Using Sports BetTracker**
 
     - **Team Game Prediction**:
