@@ -5,7 +5,7 @@ import re
 # Set page title and layout
 st.set_page_config(page_title="Sports BetTracker", layout="wide")
 
-# Display logo
+# Display logo (reverted to original)
 st.image("sports-bettracker-logo.png", width=200, caption="Sports BetTracker - Track the Action. Bet Smarter.")
 
 # Title
@@ -77,16 +77,14 @@ def parse_player_stats(stats_text, sport):
 def calculate_bet_outcome(bet_type, stake, odds):
     if stake <= 0:
         return {"error": "Stake must be greater than 0", "profit": 0, "total_return": 0}
+    if odds == 0:
+        return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
     if bet_type == "Moneyline":
-        if odds == 0:
-            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
         if odds > 0:
             profit = stake * (odds / 100)
         else:
             profit = stake / (abs(odds) / 100)
     else:  # Point Spread or Over/Under
-        if odds == 0:
-            return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
         profit = stake * (100 / abs(odds))
     profit = round(profit, 2)
     total_return = round(stake + profit, 2)
@@ -185,6 +183,16 @@ def predict_team_outcome(team1_data, team2_data, sport):
     for stat in stat_keys[1:]:
         factors.append(f"{stat} (Team 1: {t1_stats[stat]}, Team 2: {t2_stats[stat]})")
     
+    # Calculate bet outcome if betting data is provided
+    bet_info = ""
+    if "bet_type" in team1_data and "stake" in team1_data and "odds" in team1_data:
+        bet_result = calculate_bet_outcome(team1_data["bet_type"], team1_data["stake"], team1_data["odds"])
+        if "error" in bet_result:
+            bet_info = bet_result["error"]
+        else:
+            bet_info = f"{bet_result['details']}, Profit: ${bet_result['profit']}, Total Return: ${bet_result['total_return']}"
+        factors.append(f"Bet: {bet_info}")
+    
     return f"{winner} wins {predicted_score1}-{predicted_score2}", factors
 
 # Player Prop Prediction Algorithm
@@ -201,22 +209,81 @@ def predict_player_prop(player, sport):
     elif player["injury_status"] == "Questionable":
         likelihood *= 0.7
     
-    outcome = "Over" if likelihood > player["prop_value"] else "Under"
-    confidence = abs(likelihood - player["prop_value"]) / player["prop_value"] * 100 if player["prop_value"] != 0 else 0
+    try:
+        prop_value = float(player["over_under"])
+    except:
+        prop_value = 0
     
-    bet_result = calculate_bet_outcome(player["bet_type"], player["stake"], player["odds"])
+    outcome = "Over" if likelihood > prop_value else "Under"
+    confidence = abs(likelihood - prop_value) / prop_value * 100 if prop_value != 0 else 0
+    
+    bet_result = calculate_bet_outcome("Over/Under", player["stake"], player["odds"])
     if "error" in bet_result:
         bet_info = bet_result["error"]
     else:
-        bet_info = f"{bet_result['details']}, Profit: ${bet_result['profit']}, Total Return: ${bet_result['total_return']}"
+        bet_info = f"Over/Under bet: ${player['stake']} at {player['odds']:+} odds, Profit: ${bet_result['profit']}, Total Return: ${bet_result['total_return']}"
     
     factors = [
         f"Recent Stats: {player['recent_stats'] or 'None'}",
         f"Opposing Defense: {player['opp_defense']}",
         f"Injury Status: {player['injury_status']}",
+        f"Bet: {bet_info}",
+        f"Prop Value: {prop_value}"
+    ]
+    return f"{player['name']} likely to hit {outcome} {prop_value} ({confidence:.1f}% confidence)", factors, confidence / 100
+
+# Same Game Parlay Prediction
+def predict_same_game_parlay(players, sport):
+    simulations = 10000
+    successes = 0
+    individual_confidences = []
+    
+    for player in players:
+        _, _, confidence = predict_player_prop(player, sport)
+        individual_confidences.append(confidence)
+    
+    for _ in range(simulations):
+        success = True
+        for confidence in individual_confidences:
+            if np.random.random() > confidence:
+                success = False
+                break
+        if success:
+            successes += 1
+    
+    parlay_prob = (successes / simulations) * 100
+    # Calculate 95% confidence interval
+    mean_prob = parlay_prob / 100
+    std_prob = np.sqrt(mean_prob * (1 - mean_prob) / simulations)
+    ci_lower = (mean_prob - 1.96 * std_prob) * 100
+    ci_upper = (mean_prob + 1.96 * std_prob) * 100
+    ci_lower = max(0, ci_lower)
+    ci_upper = min(100, ci_upper)
+    
+    # Calculate combined odds and bet outcome
+    combined_odds = 1
+    total_stake = sum(player["stake"] for player in players)
+    for player in players:
+        odds = player["odds"]
+        if odds > 0:
+            combined_odds *= (odds / 100 + 1)
+        else:
+            combined_odds *= (100 / abs(odds) + 1)
+    combined_odds = round((combined_odds - 1) * 100) if combined_odds > 1 else round(-100 / (combined_odds - 1))
+    bet_result = calculate_bet_outcome("Parlay", total_stake, combined_odds)
+    
+    if "error" in bet_result:
+        bet_info = bet_result["error"]
+    else:
+        bet_info = f"Parlay bet: ${total_stake} at {combined_odds:+} odds, Profit: ${bet_result['profit']}, Total Return: ${bet_result['total_return']}"
+    
+    factors = [
+        f"Individual Player Probabilities: {[f'{player['name']}: {conf*100:.1f}%' for player, conf in zip(players, individual_confidences)]}",
+        f"Combined Parlay Probability: {parlay_prob:.1f}% (95% CI: {ci_lower:.1f}% - {ci_upper:.1f}%)",
         f"Bet: {bet_info}"
     ]
-    return f"{player['name']} likely to hit {outcome} {player['prop_value']} ({confidence:.1f}% confidence)", factors
+    
+    return f"Same Game Parlay: {parlay_prob:.1f}% chance of winning", factors
 
 # Define tabs
 tab1, tab2 = st.tabs(["Team Game Prediction", "Player Prop Bets"])
@@ -237,6 +304,9 @@ with tab1:
             team1_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key=f"team1_recent_{st.session_state.team_form_reset_key}")
             team1_injuries = st.text_area("Key Injuries", "", key=f"team1_injuries_{st.session_state.team_form_reset_key}")
             team1_home_away = st.selectbox("Home/Away", ["", "Home", "Away", "Neutral"], key=f"team1_home_away_{st.session_state.team_form_reset_key}")
+            team1_bet_type = st.selectbox("Bet Type (Team 1)", ["", "Moneyline", "Point Spread", "Over/Under"], key=f"team1_bet_type_{st.session_state.team_form_reset_key}")
+            team1_odds = st.number_input("Odds (Team 1, e.g., +150 or -110)", min_value=-10000, max_value=10000, value=0, key=f"team1_odds_{st.session_state.team_form_reset_key}")
+            team1_stake = st.number_input("Stake (Team 1, $)", min_value=0.0, value=0.0, step=0.01, key=f"team1_stake_{st.session_state.team_form_reset_key}")
         
         with col2:
             st.subheader("Team 2")
@@ -247,6 +317,9 @@ with tab1:
             team2_recent = st.text_input("Recent Performance (e.g., W-L last 5 games)", "", key=f"team2_recent_{st.session_state.team_form_reset_key}")
             team2_injuries = st.text_area("Key Injuries", "", key=f"team2_injuries_{st.session_state.team_form_reset_key}")
             team2_home_away = st.selectbox("Home/Away", ["", "Home", "Away", "Neutral"], key=f"team2_home_away_{st.session_state.team_form_reset_key}")
+            team2_bet_type = st.selectbox("Bet Type (Team 2)", ["", "Moneyline", "Point Spread", "Over/Under"], key=f"team2_bet_type_{st.session_state.team_form_reset_key}")
+            team2_odds = st.number_input("Odds (Team 2, e.g., +150 or -110)", min_value=-10000, max_value=10000, value=0, key=f"team2_odds_{st.session_state.team_form_reset_key}")
+            team2_stake = st.number_input("Stake (Team 2, $)", min_value=0.0, value=0.0, step=0.01, key=f"team2_stake_{st.session_state.team_form_reset_key}")
         
         with st.expander("Game Context"):
             game_type = st.selectbox("Game Type", ["", "Regular Season", "Playoffs", "Preseason"], key=f"game_type_{st.session_state.team_form_reset_key}")
@@ -265,11 +338,13 @@ with tab1:
         else:
             team1_data = {
                 "name": team1_name, "stats": team1_stats, "recent": team1_recent or "0-0",
-                "injuries": team1_injuries or "None", "home_away": team1_home_away or "Neutral", "rest_days": rest_days_team1
+                "injuries": team1_injuries or "None", "home_away": team1_home_away or "Neutral", "rest_days": rest_days_team1,
+                "bet_type": team1_bet_type, "odds": team1_odds, "stake": team1_stake
             }
             team2_data = {
                 "name": team2_name, "stats": team2_stats, "recent": team2_recent or "0-0",
-                "injuries": team2_injuries or "None", "home_away": team2_home_away or "Neutral", "rest_days": rest_days_team2
+                "injuries": team2_injuries or "None", "home_away": team2_home_away or "Neutral", "rest_days": rest_days_team2,
+                "bet_type": team2_bet_type, "odds": team2_odds, "stake": team2_stake
             }
             prediction, factors = predict_team_outcome(team1_data, team2_data, sport)
             st.success(f"Prediction: {prediction}")
@@ -299,7 +374,7 @@ with tab2:
                                                "", key=f"recent_stats_{i}_{st.session_state.player_form_reset_key}")
                 with col2:
                     prop_type = st.selectbox("Prop Type", [""] + SPORT_STATS[sport]["player_stats"], key=f"prop_type_{i}_{st.session_state.player_form_reset_key}")
-                    bet_type = st.selectbox("Bet Type", ["", "Moneyline", "Point Spread", "Over/Under"], key=f"bet_type_{i}_{st.session_state.player_form_reset_key}")
+                    over_under = st.text_input("Over/Under (e.g., 25.5)", "", key=f"over_under_{i}_{st.session_state.player_form_reset_key}")
                     odds = st.number_input("Odds (e.g., +150 or -110)", min_value=-10000, max_value=10000, value=0, key=f"odds_{i}_{st.session_state.player_form_reset_key}")
                     stake = st.number_input("Stake ($)", min_value=0.0, value=0.0, step=0.01, key=f"stake_{i}_{st.session_state.player_form_reset_key}")
                     opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "Rank: 0", key=f"opp_defense_{i}_{st.session_state.player_form_reset_key}")
@@ -307,13 +382,14 @@ with tab2:
                 
                 st.session_state.players[i] = {
                     "name": player_name, "position": position, "recent_stats": recent_stats,
-                    "prop_type": prop_type, "bet_type": bet_type, "odds": odds, "stake": stake,
+                    "prop_type": prop_type, "over_under": over_under, "odds": odds, "stake": stake,
                     "opp_defense": opp_defense, "injury_status": injury_status or "Healthy",
-                    "prop_value": stake
+                    "prop_value": over_under
                 }
         
         add_player_btn = st.form_submit_button("Add Player")
         predict_props = st.form_submit_button("Predict Player Props")
+        predict_parlay = st.form_submit_button("Predict Same Game Parlay")
         clear_players = st.form_submit_button("Clear Players")
     
     if add_player_btn:
@@ -323,13 +399,27 @@ with tab2:
     if predict_props:
         results = []
         for player in st.session_state.players:
-            if not player["name"] or player["prop_type"] == "" or player["position"] == "" or player["bet_type"] == "":
-                st.error(f"Please fill in all fields for Player {st.session_state.players.index(player) + 1} (Name, Position, Prop Type, Bet Type).")
+            if not player["name"] or player["prop_type"] == "" or player["position"] == "" or player["over_under"] == "":
+                st.error(f"Please fill in all fields for Player {st.session_state.players.index(player) + 1} (Name, Position, Prop Type, Over/Under).")
                 break
-            prediction, factors = predict_player_prop(player, sport)
+            prediction, factors, _ = predict_player_prop(player, sport)
             results.append(f"{prediction}\nKey Factors:\n" + "\n".join([f"- {f}" for f in factors]))
         if results:
             st.success("\n\n".join(results))
+    
+    if predict_parlay:
+        if len(st.session_state.players) < 2:
+            st.error("Please add at least two players for a same-game parlay.")
+        else:
+            valid_players = [p for p in st.session_state.players if p["name"] and p["prop_type"] != "" and p["position"] != "" and p["over_under"] != ""]
+            if len(valid_players) < 2:
+                st.error("Please fill in all fields (Name, Position, Prop Type, Over/Under) for at least two players.")
+            else:
+                prediction, factors = predict_same_game_parlay(valid_players, sport)
+                st.success(f"Prediction: {prediction}")
+                st.write("Key Factors:")
+                for factor in factors:
+                    st.write(f"- {factor}")
     
     if clear_players:
         st.session_state.players = [{}]
