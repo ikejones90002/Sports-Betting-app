@@ -9,7 +9,7 @@ st.set_page_config(page_title="Sports BetTracker", layout="wide")
 st.image("sports-bettracker-logo.png", width=200, caption="Sports BetTracker - Track the Action. Bet Smarter.")
 
 # Title
-st.title("🏀⚾🏒🏈 Sports BetTracker")
+st.title("🏀⚾🏒🏈👊 Sports BetTracker")
 
 # How to Use Guide
 with st.expander("How to Use Sports BetTracker"):
@@ -39,7 +39,7 @@ with st.expander("How to Use Sports BetTracker"):
     """)
 
 # Sport selection
-sport = st.selectbox("Select Sport", ["Football", "Baseball", "Basketball", "Hockey"], key="sport")
+sport = st.selectbox("Select Sport", ["Football", "Baseball", "Basketball", "Hockey", "MMA"], key="sport")
 
 # Define sport-specific stats and positions
 SPORT_STATS = {
@@ -62,6 +62,11 @@ SPORT_STATS = {
         "team_stats": ["Goals", "Shots on Goal", "Save %"],
         "player_positions": ["C", "LW", "RW", "D", "G"],
         "player_stats": ["Goals", "Assists", "Shots on Goal", "Save %"]
+    },
+    "MMA": {
+        "team_stats": ["Strikes", "Takedowns", "Submissions"],
+        "player_positions": ["Fighter"],
+        "player_stats": ["Method of Victory", "Fight Goes the Distance", "Inside the Distance", "Round Betting", "Total Rounds Over/Under"]
     }
 }
 
@@ -265,13 +270,21 @@ def predict_player_prop(player, sport):
     
     try:
         prop_value = float(player["over_under"])
-    except:
-        prop_value = 0
+        is_numerical = True
+    except ValueError:
+        prop_value = 50
+        is_numerical = False
     
-    outcome = "Over" if likelihood > prop_value else "Under"
-    confidence = abs(likelihood - prop_value) / prop_value * 100 if prop_value != 0 else 0
+    if is_numerical:
+        outcome = "Over" if likelihood > prop_value else "Under"
+        confidence = abs(likelihood - prop_value) / prop_value * 100 if prop_value != 0 else 0
+        outcome_str = f"go {outcome} {player['over_under']}"
+    else:
+        outcome = player["over_under"] if likelihood > prop_value else f"not {player['over_under']}"
+        confidence = abs(likelihood - prop_value) / 50 * 100
+        outcome_str = outcome
     
-    return f"{player['name']} likely to hit {outcome} {prop_value} ({confidence:.1f}% confidence)", confidence / 100
+    return f"{player['name']} likely to {outcome_str} for {player['prop_type']} ({confidence:.1f}% confidence)", confidence / 100
 
 # Same Game Parlay Prediction
 def predict_same_game_parlay(players, sport, stake):
@@ -420,7 +433,8 @@ with tab2:
                                                "", key=f"recent_stats_{i}_{st.session_state.player_form_reset_key}")
                 with col2:
                     prop_type = st.selectbox("Prop Type *", [""] + SPORT_STATS[sport]["player_stats"], key=f"prop_type_{i}_{st.session_state.player_form_reset_key}")
-                    over_under = st.text_input("Over/Under * (e.g., 25.5)", "", key=f"over_under_{i}_{st.session_state.player_form_reset_key}")
+                    prop_label = "Over/Under * (e.g., 25.5)" if sport != "MMA" else "Prop Option * (e.g., KO/TKO, Yes/No, 2.5, 3)"
+                    over_under = st.text_input(prop_label, "", key=f"over_under_{i}_{st.session_state.player_form_reset_key}")
                     odds = st.number_input("Odds * (e.g., +150 or -110)", min_value=-10000, max_value=10000, value=0, key=f"odds_{i}_{st.session_state.player_form_reset_key}")
                     opp_defense = st.text_input("Opposing Defense (e.g., Rank)", "Rank: 0", key=f"opp_defense_{i}_{st.session_state.player_form_reset_key}")
                     injury_status = st.selectbox("Injury Status", ["", "Healthy", "Questionable", "Out"], key=f"injury_status_{i}_{st.session_state.player_form_reset_key}")
@@ -450,11 +464,6 @@ with tab2:
             if not player["name"] or player["prop_type"] == "" or player["position"] == "" or player["over_under"] == "":
                 st.error(f"Please fill in all required fields for Player {st.session_state.players.index(player) + 1} (Name, Position, Prop Type, Over/Under).")
                 break
-            try:
-                float(player["over_under"])
-            except:
-                st.error(f"Over/Under for Player {st.session_state.players.index(player) + 1} must be a number (e.g., 25.5).")
-                break
             if player["odds"] == 0:
                 st.error(f"Please provide non-zero Odds for Player {st.session_state.players.index(player) + 1}.")
                 break
@@ -471,11 +480,6 @@ with tab2:
             for player in st.session_state.players:
                 if not player["name"] or player["prop_type"] == "" or player["position"] == "" or player["over_under"] == "":
                     continue
-                try:
-                    float(player["over_under"])
-                except:
-                    st.error(f"Over/Under for Player {st.session_state.players.index(player) + 1} must be a number (e.g., 25.5).")
-                    break
                 if player["odds"] == 0:
                     st.error(f"Please provide non-zero Odds for Player {st.session_state.players.index(player) + 1}.")
                     break
