@@ -1,5 +1,5 @@
 # -------------------------------------------------------------
-# Sports BetTracker – Streamlit UI (full, updated version)
+# Sports BetTracker – Full script (with MMA fix)
 # -------------------------------------------------------------
 import re
 import numpy as np               # type: ignore
@@ -7,19 +7,23 @@ import streamlit as st           # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
 
 # -------------------------------------------------------------
-# 0️⃣ Page config & branding
+# 0️⃣ Page configuration & branding
 # -------------------------------------------------------------
 st.set_page_config(
     page_title="Sports BetTracker",
+    page_icon="sports-bettracker-logo.png",
     layout="wide"
-)
+    )
 
-st.image("sports-bettracker-logo.png", width=200,
-         caption="Sports BetTracker – Track the Action. Bet Smarter.")
+st.image(
+    "sports-bettracker-logo.png",
+    width=200,
+    caption="Sports BetTracker – Track the Action. Bet Smarter.",
+)
 st.title("🏀⚾🏒🏈👊 Sports BetTracker")
 
 # -------------------------------------------------------------
-# 1️⃣ How‑to guide (collapsible)
+# 1️⃣ How‑to guide
 # -------------------------------------------------------------
 with st.expander("How to Use Sports BetTracker"):
     st.markdown(
@@ -29,16 +33,15 @@ with st.expander("How to Use Sports BetTracker"):
 * **Team Game Prediction** – Fill in two teams, their stats, recent form, injuries, and home/away status.  
   *Optional*: bet details (type, odds, stake). Click **Predict Game Outcome** for:
 
-  - Winner & predicted score (including per‑period breakdown)  
-  - First‑to‑score team & type of score  
-  - Winning margin & win probability (95 % CI)  
+  - Winner & predicted score (or round/fight details for MMA)  
+  - First‑to‑score (or first significant strike for MMA)  
+  - Winning margin (points or rounds)  
+  - Win probability with 95 % CI  
   - Betting outcome if odds/stake supplied  
 
-* **Player Prop Bets** – Add players, recent stats, prop type, line/option, odds & opponent info.  
-  Click **Predict Player Props** for individual prop probabilities.
+* **Player Prop Bets** – Add players, recent stats, prop type, line/option, odds & opponent info. Click **Predict Player Props** for individual probabilities.
 
-* **Same‑Game Parlay** – Add ≥ 2 players with complete prop data and a combined stake.  
-  Click **Predict Same Game Parlay** for overall parlay win % (95 % CI) and payout.
+* **Same‑Game Parlay** – Add ≥ 2 players with complete prop data and a combined stake. Click **Predict Same‑Game Parlay** for overall win % (95 % CI) and payout.
 
 * **Clear** – “Clear Inputs” or “Clear Players” resets the form.
 
@@ -47,7 +50,7 @@ Enjoy smarter betting! 🎯
     )
 
 # -------------------------------------------------------------
-# 2️⃣ Sport selection
+# 2️⃣ Sport selector
 # -------------------------------------------------------------
 sport = st.selectbox(
     "Select Sport",
@@ -68,9 +71,28 @@ SPORT_STATS = {
     },
     "Baseball": {
         "team_stats": ["Runs", "Hits", "Errors"],
-        "team_periods": ["Inning 1", "Inning 2", "Inning 3", "Inning 4",
-                        "Inning 5", "Inning 6", "Inning 7", "Inning 8", "Inning 9"],
-        "player_positions": ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"],
+        "team_periods": [
+            "Inning 1",
+            "Inning 2",
+            "Inning 3",
+            "Inning 4",
+            "Inning 5",
+            "Inning 6",
+            "Inning 7",
+            "Inning 8",
+            "Inning 9",
+        ],
+        "player_positions": [
+            "P",
+            "C",
+            "1B",
+            "2B",
+            "3B",
+            "SS",
+            "LF",
+            "CF",
+            "RF",
+        ],
         "player_stats": ["Batting Average", "Home Runs", "RBIs", "Pitcher ERA"],
         "prop_types": ["Batting Average", "Home Runs", "RBIs", "Pitcher ERA"],
     },
@@ -92,16 +114,29 @@ SPORT_STATS = {
         "team_stats": ["Strikes", "Takedowns", "Submissions"],
         "team_periods": ["Round 1", "Round 2", "Round 3", "Round 4", "Round 5"],
         "player_positions": ["Fighter"],
-        "player_stats": ["SLpM", "Str Acc", "TD Avg", "TD Acc",
-                        "Sub Avg", "KO %", "Sub %", "Dec %", "Avg Rounds"],
-        "prop_types": ["Method of Victory", "Fight Goes the Distance",
-                       "Inside the Distance", "Round Betting",
-                       "Total Rounds Over/Under"],
+        "player_stats": [
+            "SLpM",
+            "Str Acc",
+            "TD Avg",
+            "TD Acc",
+            "Sub Avg",
+            "KO %",
+            "Sub %",
+            "Dec %",
+            "Avg Rounds",
+        ],
+        "prop_types": [
+            "Method of Victory",
+            "Fight Goes the Distance",
+            "Inside the Distance",
+            "Round Betting",
+            "Total Rounds Over/Under",
+        ],
     },
 }
 
 # -------------------------------------------------------------
-# 4️⃣ Session‑state init (form resets, player list)
+# 4️⃣ Session‑state initialisation
 # -------------------------------------------------------------
 if "team_form_reset_key" not in st.session_state:
     st.session_state.team_form_reset_key = 0
@@ -114,7 +149,6 @@ if "players" not in st.session_state:
 # 5️⃣ Helper functions (parsing, betting, etc.)
 # -------------------------------------------------------------
 def parse_stats(stats_text: str, sport_key: str) -> dict:
-    """Extract `stat: value` pairs from the free‑text box."""
     out = {}
     for stat in SPORT_STATS[sport_key]["team_stats"]:
         m = re.search(rf"{stat}: (\d+\.?\d*)", stats_text)
@@ -123,7 +157,6 @@ def parse_stats(stats_text: str, sport_key: str) -> dict:
 
 
 def parse_recent_performance(record: str) -> float:
-    """`W-L` → win‑rate (0‑1)."""
     try:
         w, l = map(int, record.split("-"))
         total = w + l
@@ -133,30 +166,30 @@ def parse_recent_performance(record: str) -> float:
 
 
 def parse_player_stats(txt: str) -> dict:
-    """Grab key/value pairs from player‑stat text area."""
     d = {}
-    for key, val in re.findall(r"([\w %]+): (\d+\.?\d*)", txt):
-        d[key.strip().replace(" %", "")] = float(val)
+    for k, v in re.findall(r"([\w %]+): (\d+\.?\d*)", txt):
+        d[k.strip().replace(" %", "")] = float(v)
     if not d:
-        # fallback – grab first number
         m = re.search(r"(\d+\.?\d*)", txt)
         d["default"] = float(m.group(1)) if m else 0.0
     return d
 
 
 def calculate_bet_outcome(bet_type: str, stake: float, odds: int) -> dict:
-    """Moneyline / Spread / Over‑Under profit calculation."""
     if stake <= 0:
         return {"error": "Stake must be > 0", "profit": 0, "total_return": 0}
     if odds == 0:
         return {"error": "Odds cannot be zero", "profit": 0, "total_return": 0}
     if bet_type == "Moneyline":
         profit = stake * (odds / 100) if odds > 0 else stake / (abs(odds) / 100)
-    else:  # Spread or Over/Under
+    else:  # Spread / Over‑Under
         profit = stake * (100 / abs(odds))
     profit = round(profit, 2)
-    return {"profit": profit, "total_return": round(stake + profit, 2),
-            "details": f"{bet_type} @ {odds:+}"}
+    return {
+        "profit": profit,
+        "total_return": round(stake + profit, 2),
+        "details": f"{bet_type} @ {odds:+}",
+    }
 
 
 def american_to_decimal(odds: int) -> float:
@@ -172,34 +205,37 @@ def sgp_payout(odds_list: list[int], stake: float) -> dict:
     for o in odds_list:
         dec *= american_to_decimal(o)
     total = round(stake * dec, 2)
-    return {"profit": round(total - stake, 2), "total_return": total,
-            "details": f"Parlay @ {round((dec - 1) * 100, 0):+}"}
-
+    return {
+        "profit": round(total - stake, 2),
+        "total_return": total,
+        "details": f"Parlay @ {round((dec - 1) * 100, 0):+}",
+    }
 
 # -------------------------------------------------------------
-# 6️⃣ Core prediction logic (team)
+# 6️⃣ **NEW** – Updated prediction routine (MMA aware)
 # -------------------------------------------------------------
 def predict_team_outcome(team1: dict, team2: dict, sport_key: str) -> tuple[str, list]:
     """
     Returns:
-        - Human readable prediction string (winner, score, margin, first‑to‑score)
-        - List of explanatory factor strings
+        - A readable prediction string.
+        - A list of explanatory “factor” strings.
+    The function now contains a dedicated branch for MMA that reports
+    method of victory, finishing round, margin in rounds, and first
+    significant strike instead of a meaningless point‑score.
     """
-    # ----- Parse raw inputs -------------------------------------------------
+    # ---------- common parsing ----------
     t1_stats = parse_stats(team1["stats"], sport_key)
     t2_stats = parse_stats(team2["stats"], sport_key)
     t1_recent = parse_recent_performance(team1["recent"])
     t2_recent = parse_recent_performance(team2["recent"])
 
-    # ----- Simple weighted score (same as original) -------------------------
+    # ---------- weighted score ----------
     w = {"main": 0.4, "secondary": 0.3, "tertiary": 0.2, "recent": 0.1, "home_away": 0.05}
     keys = SPORT_STATS[sport_key]["team_stats"]
 
-    # start with main stat
     t1_score = t1_stats[keys[0]] * w["main"]
     t2_score = t2_stats[keys[0]] * w["main"]
 
-    # secondary / tertiary when they exist
     if len(keys) > 1:
         factor = 10 if sport_key == "Football" else 1
         t1_score += t1_stats[keys[1]] / factor * w["secondary"]
@@ -209,11 +245,9 @@ def predict_team_outcome(team1: dict, team2: dict, sport_key: str) -> tuple[str,
         t1_score -= t1_stats[keys[2]] * factor * w["tertiary"]
         t2_score -= t2_stats[keys[2]] * factor * w["tertiary"]
 
-    # recent performance
+    # recent, home/away, injuries, rest‑day adjustments
     t1_score += t1_recent * 20 * w["recent"]
     t2_score += t2_recent * 20 * w["recent"]
-
-    # home/away advantage
     if team1["home_away"] == "Home":
         t1_score *= 1 + w["home_away"]
     elif team1["home_away"] == "Away":
@@ -222,17 +256,13 @@ def predict_team_outcome(team1: dict, team2: dict, sport_key: str) -> tuple[str,
         t2_score *= 1 + w["home_away"]
     elif team2["home_away"] == "Away":
         t2_score *= 1 - w["home_away"]
-
-    # injuries
     t1_score *= 0.95 if "out" in team1["injuries"].lower() else 1.0
     t2_score *= 0.95 if "out" in team2["injuries"].lower() else 1.0
-
-    # rest‑day adjustment
     rd = team1["rest_days"] - team2["rest_days"]
     t1_score *= 1 + 0.02 * rd
     t2_score *= 1 - 0.02 * rd
 
-    # ----- Monte‑Carlo simulation -----------------------------------------
+    # ---------- Monte‑Carlo ----------
     sims = 10_000
     t1_wins = 0
     diffs = []
@@ -242,11 +272,10 @@ def predict_team_outcome(team1: dict, team2: dict, sport_key: str) -> tuple[str,
         diffs.append(s1 - s2)
         if s1 > s2:
             t1_wins += 1
-
     win_p1 = t1_wins / sims * 100
     win_p2 = 100 - win_p1
 
-    # ----- 95 % confidence interval (logistic conversion) ------------------
+    # 95 % CI (logistic conversion)
     mean_diff = np.mean(diffs)
     std_diff = np.std(diffs)
     ci_low = mean_diff - 1.96 * std_diff / np.sqrt(sims)
@@ -254,90 +283,166 @@ def predict_team_outcome(team1: dict, team2: dict, sport_key: str) -> tuple[str,
     ci_low_p = (1 / (1 + np.exp(-ci_low))) * 100
     ci_up_p = (1 / (1 + np.exp(-ci_up))) * 100
 
-    # ----- Predicted *total* score -----------------------------------------
-    main = keys[0]  # points‑type stat (e.g., Points, Runs, Goals)
-    score_gap = abs(t1_score - t2_score) / 2
-    pred1 = round(t1_stats[main] + score_gap if t1_score > t2_score else t1_stats[main] - score_gap)
-    pred2 = round(t2_stats[main] - score_gap if t1_score > t2_score else t2_stats[main] + score_gap)
+    # -----------------------------------------------------------------
+    # 7️⃣  Sport‑specific output
+    # -----------------------------------------------------------------
+    if sport_key != "MMA":
+        # -------------------- TEAM‑SPORTS --------------------
+        main = keys[0]                     # e.g. Points, Runs, Goals
+        score_gap = abs(t1_score - t2_score) / 2
+        pred1 = round(t1_stats[main] + score_gap if t1_score > t2_score else t1_stats[main] - score_gap)
+        pred2 = round(t2_stats[main] - score_gap if t1_score > t2_score else t2_stats[main] + score_gap)
 
-    # ----- Winning margin --------------------------------------------------
-    win_margin = abs(pred1 - pred2)
+        win_margin = abs(pred1 - pred2)
 
-    # ----- First‑to‑score (simple heuristic) -------------------------------
-    # we assume the team with higher “recent win rate” scores first;
-    # if equal, we look at home‑advantage.
-    if t1_recent > t2_recent:
-        first = team1["name"]
-        first_type = "Touchdown / Run / Goal"  # generic placeholder
-    elif t2_recent > t1_recent:
-        first = team2["name"]
-        first_type = "Touchdown / Run / Goal"
-    else:
-        first = team1["name"] if team1["home_away"] == "Home" else team2["name"]
-        first_type = "Touchdown / Run / Goal"
-
-    # ----- Construct human‑readable output ---------------------------------
-    winner = team1["name"] if t1_score > t2_score else team2["name"]
-    win_prob = win_p1 if t1_score > t2_score else win_p2
-    pred_str = f"{winner} wins {pred1}-{pred2}"
-    # add extra info
-    pred_str += f" | Margin: {win_margin}"
-    pred_str += f" | First to score: {first} ({first_type})"
-
-    # ----- Period‑by‑period breakdown (very rough) -------------------------
-    # We simply split the total predicted points proportionally across periods.
-    periods = SPORT_STATS[sport_key]["team_periods"]
-    per_period = {}
-    for p in periods:
-        # Simple even split – you can replace with a smarter model later
-        per_period[p] = (pred1 if winner == team1["name"] else pred2) // len(periods)
-
-    # ----- Build factor list ------------------------------------------------
-    factors = [
-        f"Main stat ({main}) – Team 1: {t1_stats[main]}, Team 2: {t2_stats[main]}",
-        f"Recent win % – Team 1: {t1_recent:.2f}, Team 2: {t2_recent:.2f}",
-        f"Injuries – {team1['injuries']} vs {team2['injuries']}",
-        f"Home/Away – {team1['home_away']} vs {team2['home_away']}",
-        f"Rest days – {team1['rest_days']} vs {team2['rest_days']}",
-        f"Win prob – {winner} {win_prob:.1f}% (95 % CI {min(ci_low_p,ci_up_p):.1f}%–{max(ci_low_p,ci_up_p):.1f}%)",
-        f"Winning margin – {win_margin}",
-        f"First to score – {first} ({first_type})",
-        "Score breakdown by period:",
-    ]
-    for p, pts in per_period.items():
-        factors.append(f"  • {p}: {pts}")
-
-    # ----- Betting outcome (if supplied) ------------------------------------
-    bet_info = ""
-    win_data = team1 if winner == team1["name"] else team2
-    if win_data.get("bet_type") and win_data["bet_type"] != "" and win_data["stake"] > 0:
-        bet_res = calculate_bet_outcome(win_data["bet_type"], win_data["stake"], win_data["odds"])
-        if "error" in bet_res:
-            bet_info = bet_res["error"]
+        # first‑to‑score heuristic
+        if t1_recent > t2_recent:
+            first = team1["name"]
+            first_type = "Touchdown / Run / Goal"
+        elif t2_recent > t1_recent:
+            first = team2["name"]
+            first_type = "Touchdown / Run / Goal"
         else:
-            bet_info = f"{bet_res['details']}, Profit ${bet_res['profit']}, Return ${bet_res['total_return']}"
-        factors.append(f"Bet for {winner}: {bet_info}")
+            first = team1["name"] if team1["home_away"] == "Home" else team2["name"]
+            first_type = "Touchdown / Run / Goal"
 
-    return pred_str, factors
+        winner = team1["name"] if t1_score > t2_score else team2["name"]
+        win_prob = win_p1 if t1_score > t2_score else win_p2
+        pred_str = f"{winner} wins {pred1}-{pred2}"
+        pred_str += f" | Margin: {win_margin}"
+        pred_str += f" | First to score: {first} ({first_type})"
+
+        # period breakdown (even split – placeholder)
+        periods = SPORT_STATS[sport_key]["team_periods"]
+        per_period = {}
+        for p in periods:
+            per_period[p] = (pred1 if winner == team1["name"] else pred2) // len(periods)
+
+        # factor list
+        factors = [
+            f"Main stat ({main}) – Team 1: {t1_stats[main]}, Team 2: {t2_stats[main]}",
+            f"Recent win% – Team 1: {t1_recent:.2f}, Team 2: {t2_recent:.2f}",
+            f"Injuries – {team1['injuries']} vs {team2['injuries']}",
+            f"Home/Away – {team1['home_away']} vs {team2['home_away']}",
+            f"Rest days – {team1['rest_days']} vs {team2['rest_days']}",
+            f"Win probability – {winner} {win_prob:.1f}% (95 % CI {min(ci_low_p,ci_up_p):.1f}%–{max(ci_low_p,ci_up_p):.1f}%)",
+            f"Winning margin – {win_margin}",
+            f"First to score – {first} ({first_type})",
+            "Score breakdown by period:",
+        ]
+        for p, pts in per_period.items():
+            factors.append(f"  • {p}: {pts}")
+
+        # betting outcome (if supplied)
+        bet_info = ""
+        win_data = team1 if winner == team1["name"] else team2
+        if win_data.get("bet_type") and win_data["bet_type"] != "" and win_data["stake"] > 0:
+            bet_res = calculate_bet_outcome(win_data["bet_type"], win_data["stake"], win_data["odds"])
+            if "error" in bet_res:
+                bet_info = bet_res["error"]
+            else:
+                bet_info = f"{bet_res['details']}, Profit ${bet_res['profit']}, Return ${bet_res['total_return']}"
+            factors.append(f"Bet for {winner}: {bet_info}")
+
+        return pred_str, factors
+
+    else:
+        # -------------------- MMA --------------------
+        # Map Monte‑Carlo scores to a finishing round (1‑5)
+        max_rounds = 5
+        min_sc, max_sc = min(t1_score, t2_score), max(t1_score, t2_score)
+        if max_sc == min_sc:
+            finish_round = 3
+        else:
+            prop = (max(t1_score, t2_score) - min_sc) / (max_sc - min_sc)
+            finish_round = int(np.clip(round(prop * max_rounds), 1, max_rounds))
+
+        winner = team1["name"] if t1_score > t2_score else team2["name"]
+        win_prob = win_p1 if t1_score > t2_score else win_p2
+
+        # Very simple method‑of‑victory heuristic
+        t1_method_score = (
+            t1_recent * 0.5
+            + (t1_stats.get("Strikes", 0) + t1_stats.get("Takedowns", 0)) * 0.3
+        )
+        t2_method_score = (
+            t2_recent * 0.5
+            + (t2_stats.get("Strikes", 0) + t2_stats.get("Takedowns", 0)) * 0.3
+        )
+        method = "KO/TKO" if (t1_method_score if winner == team1["name"] else t2_method_score) > 0.6 else "Decision"
+
+        # Margin in rounds (how many rounds the winner was ahead)
+        margin_rounds = max_rounds - finish_round + 1
+
+        # First significant strike – reuse recent‑win% logic
+        if t1_recent > t2_recent:
+            first_striker = team1["name"]
+        elif t2_recent > t1_recent:
+            first_striker = team2["name"]
+        else:
+            first_striker = team1["name"] if team1["home_away"] == "Home" else team2["name"]
+
+        # Build readable prediction
+        pred_str = (
+            f"{winner} wins via {method} in round {finish_round}"
+            f" | Margin: {margin_rounds} round{'s' if margin_rounds > 1 else ''}"
+            f" | First significant strike: {first_striker}"
+        )
+
+        # round‑by‑round breakdown (placeholder – even split)
+        periods = SPORT_STATS["MMA"]["team_periods"]
+        per_round = {p: finish_round for p in periods}
+
+        # factor list (MMA‑specific wording)
+        factors = [
+            f"Recent win% – {team1['name']}: {t1_recent:.2f}, {team2['name']}: {t2_recent:.2f}",
+            f"Injuries – {team1['injuries']} vs {team2['injuries']}",
+            f"Home/Away – {team1['home_away']} vs {team2['home_away']}",
+            f"Rest days – {team1['rest_days']} vs {team2['rest_days']}",
+            f"Win probability – {winner} {win_prob:.1f}% (95 % CI {min(ci_low_p,ci_up_p):.1f}%–{max(ci_low_p,ci_up_p):.1f}%)",
+            f"Method of victory – {method}",
+            f"Finishing round – {finish_round}",
+            f"Margin – {margin_rounds} round{'s' if margin_rounds > 1 else ''}",
+            f"First significant strike – {first_striker}",
+            "Round‑by‑round breakdown:",
+        ]
+        for p, r in per_round.items():
+            factors.append(f"  • {p}: {r}")
+
+        # betting outcome (unchanged)
+        bet_info = ""
+        win_data = team1 if winner == team1["name"] else team2
+        if win_data.get("bet_type") and win_data["bet_type"] != "" and win_data["stake"] > 0:
+            bet_res = calculate_bet_outcome(win_data["bet_type"], win_data["stake"], win_data["odds"])
+            if "error" in bet_res:
+                bet_info = bet_res["error"]
+            else:
+                bet_info = f"{bet_res['details']}, Profit ${bet_res['profit']}, Return ${bet_res['total_return']}"
+            factors.append(f"Bet for {winner}: {bet_info}")
+
+        return pred_str, factors
 
 
 # -------------------------------------------------------------
-# 7️⃣ Player‑prop prediction (unchanged – only minor tidy‑up)
+# 7️⃣ Player‑prop prediction (unchanged)
 # -------------------------------------------------------------
 def predict_player_prop(player: dict, sport_key: str) -> tuple[str, float]:
-    """Return a printable sentence and the raw probability (0‑1)."""
     p_stats = parse_player_stats(player["recent_stats"])
     opp = parse_player_stats(player["opp_defense"])
-    def_rank = opp.get("Rank", 16)                # default worst rank
-    injury_adj = 0.0 if player["injury_status"] == "Out" else 0.7 if player["injury_status"] == "Questionable" else 1.0
+    def_rank = opp.get("Rank", 16)
+    injury_adj = (
+        0.0
+        if player["injury_status"] == "Out"
+        else 0.7
+        if player["injury_status"] == "Questionable"
+        else 1.0
+    )
 
-    # ---- Non‑MMA linear model -------------------------------------------------
+    # -------------------- NON‑MMA --------------------
     if sport_key != "MMA":
         mean = p_stats.get(player["prop_type"], p_stats.get("default", 0))
         sd = max(mean * 0.15, 1)
-        # defensive rank adjustment (higher rank = poorer defense)
         mean *= (1 + (def_rank - 16) * 0.02) * injury_adj
-        # numeric vs non‑numeric line
         try:
             line_val = float(player["over_under"])
             numeric = True
@@ -353,16 +458,14 @@ def predict_player_prop(player: dict, sport_key: str) -> tuple[str, float]:
             elif player["bet_side"] == "Under":
                 prob = 1 - prob_over
                 outcome = f"Under {line_val}"
-            else:          # no side chosen – take the higher‑prob side
+            else:
                 prob = max(prob_over, 1 - prob_over)
                 outcome = f"{'Over' if prob_over > 0.5 else 'Under'} {line_val}"
         else:
-            # treat non‑numeric options as a simple percentage based on mean
             prob = min(max(mean / 100 * injury_adj, 0), 1)
             outcome = player["over_under"]
-    # ---- MMA special handling -------------------------------------------------
+    # -------------------- MMA --------------------
     else:
-        # convert percentages to 0‑1
         ko = p_stats.get("KO %", 0) / 100 * injury_adj
         sub = p_stats.get("Sub %", 0) / 100 * injury_adj
         dec = p_stats.get("Dec %", 0) / 100 * injury_adj
@@ -370,7 +473,7 @@ def predict_player_prop(player: dict, sport_key: str) -> tuple[str, float]:
         if total:
             ko, sub, dec = ko / total, sub / total, dec / total
 
-        # opponent defensive vulnerability (optional)
+        # defence vulnerability adjustments (optional)
         ko += (opp.get("KO Vuln", 20) / 100 - 0.2)
         sub += (opp.get("Sub Vuln", 20) / 100 - 0.2)
         dec += (opp.get("Dec Vuln", 20) / 100 - 0.2)
@@ -413,10 +516,12 @@ def predict_player_prop(player: dict, sport_key: str) -> tuple[str, float]:
                 prob = max(prob_over, 1 - prob_over)
                 outcome = f"{'Over' if prob_over > 0.5 else 'Under'} {target}"
         elif pt == "Round Betting":
-            # crude model: probability to finish in the specific round
             try:
                 match = re.search(r"\d+", line)
-                r = float(match.group()) if match else 1
+                if match:
+                    r = float(match.group())
+                else:
+                    r = 1
             except Exception:
                 r = 1
             per_round = (ko + sub) / 3.0
@@ -426,7 +531,6 @@ def predict_player_prop(player: dict, sport_key: str) -> tuple[str, float]:
             prob = 0.5
             outcome = line
 
-    # ----- Build readable sentence -------------------------------------------
     if prob >= 0.5:
         txt = f"{player['name']} likely to {outcome} ({prob*100:.1f}% prob.)"
     else:
@@ -435,24 +539,23 @@ def predict_player_prop(player: dict, sport_key: str) -> tuple[str, float]:
 
 
 # -------------------------------------------------------------
-# 8️⃣ Same‑Game Parlay (unchanged, just tidy‑up)
+# 8️⃣ Same‑Game Parlay (unchanged)
 # -------------------------------------------------------------
 def predict_same_game_parlay(players: list[dict], sport_key: str, stake: float) -> tuple[str, list]:
     sims = 10_000
     successes = 0
-    confs = []
+    confidences = []
     odds = []
-    for p in players:
-        _, c = predict_player_prop(p, sport_key)
-        confs.append(c)
-        odds.append(p["odds"])
+    for pl in players:
+        _, c = predict_player_prop(pl, sport_key)
+        confidences.append(c)
+        odds.append(pl["odds"])
 
     for _ in range(sims):
-        if all(np.random.random() <= c for c in confs):
+        if all(np.random.random() <= c for c in confidences):
             successes += 1
 
     parlay_prob = successes / sims * 100
-    # 95 % CI
     mean = parlay_prob / 100
     std = np.sqrt(mean * (1 - mean) / sims)
     ci_low = max(0, (mean - 1.96 * std) * 100)
@@ -460,13 +563,13 @@ def predict_same_game_parlay(players: list[dict], sport_key: str, stake: float) 
 
     bet_msg = ""
     if stake > 0:
-        bet = sgp_payout(odds, stake)
-        if "error" not in bet:
-            bet_msg = f"{bet['details']}, Profit ${bet['profit']}, Return ${bet['total_return']}"
+        bet_res = sgp_payout(odds, stake)
+        if "error" not in bet_res:
+            bet_msg = f"{bet_res['details']}, Profit ${bet_res['profit']}, Return ${bet_res['total_return']}"
 
     factors = [
-        f"Individual player win %: {[f'{pl['name']}: {c*100:.1f}%' for pl, c in zip(players, confs)]}",
-        f"Combined parlay win %: {parlay_prob:.1f}% (95 % CI {ci_low:.1f}% – {ci_up:.1f}%)",
+        f"Individual player win %: {[f'{pl['name']}: {c*100:.1f}%' for pl, c in zip(players, confidences)]}",
+        f"Combined parlay win %: {parlay_prob:.1f}% (95 % CI {ci_low:.1f}%–{ci_up:.1f}%)"
     ]
     if bet_msg:
         factors.append(f"Bet: {bet_msg}")
@@ -475,7 +578,7 @@ def predict_same_game_parlay(players: list[dict], sport_key: str, stake: float) 
 
 
 # -------------------------------------------------------------
-# 9️⃣ UI – two tabs (Team & Player)
+# 9️⃣  UI – two tabs (Team & Player)
 # -------------------------------------------------------------
 tab_game, tab_props = st.tabs(["Team Game Prediction", "Player Prop Bets"])
 
@@ -530,10 +633,14 @@ with tab_game:
 
         # ---------- Game context ----------
         with st.expander("Game Context"):
-            game_type = st.selectbox("Game Type", ["", "Regular", "Playoffs", "Preseason"],
-                                     key=f"game_type_{st.session_state.team_form_reset_key}")
-            weather = st.selectbox("Weather", ["", "Clear", "Rain", "Snow", "Windy"],
-                                   key=f"weather_{st.session_state.team_form_reset_key}")
+            game_type = st.selectbox(
+                "Game Type", ["", "Regular", "Playoffs", "Preseason"],
+                key=f"game_type_{st.session_state.team_form_reset_key}",
+            )
+            weather = st.selectbox(
+                "Weather", ["", "Clear", "Rain", "Snow", "Windy"],
+                key=f"weather_{st.session_state.team_form_reset_key}",
+            )
             r1 = st.slider("Rest days – Team 1", 0, 14, 0,
                            key=f"rest1_{st.session_state.team_form_reset_key}")
             r2 = st.slider("Rest days – Team 2", 0, 14, 0,
@@ -546,25 +653,23 @@ with tab_game:
     #   Handle submit / clear
     # -----------------------------------------------------------------
     if submit:
-        # ---- basic validation -------------------------------------------------
         if not t1_name or not t2_name:
             st.error("Both team names are required.")
         elif t1_home == "" or t2_home == "":
             st.error("Select Home/Away for both teams.")
         else:
-            # ---- betting validation --------------------------------------------
+            # betting validation
             bet_err = []
-            for lbl, bt, od, st_ in [
-                ("Team 1", t1_bet_type, t1_odds, t1_stake),
-                ("Team 2", t2_bet_type, t2_odds, t2_stake),
+            for lbl, d in [
+                ("Team 1", {"bet_type": t1_bet_type, "odds": t1_odds, "stake": t1_stake}),
+                ("Team 2", {"bet_type": t2_bet_type, "odds": t2_odds, "stake": t2_stake}),
             ]:
-                if st_ > 0 and (bt == "" or od == 0):
+                if d["stake"] > 0 and (d["bet_type"] == "" or d["odds"] == 0):
                     bet_err.append(f"{lbl}: provide Bet Type and non‑zero Odds if Stake > 0.")
             if bet_err:
                 for e in bet_err:
                     st.error(e)
             else:
-                # ---- package dicts for prediction function -----------------------
                 team1_dict = {
                     "name": t1_name,
                     "stats": t1_stats,
@@ -594,6 +699,9 @@ with tab_game:
                 st.success(f"**Prediction** – {pred}")
                 st.subheader("Key factors")
                 for f in factors:
+                    # Replace generic wording for MMA only
+                    if sport == "MMA":
+                        f = f.replace("First to score", "First significant strike")
                     st.write(f"- {f}")
 
     if clear:
@@ -602,7 +710,7 @@ with tab_game:
 
 
 # -----------------------------------------------------------------
-#   TAB 2 – PLAYER PROP BETS
+#   TAB 2 – PLAYER PROP BETS (unchanged)
 # -----------------------------------------------------------------
 with tab_props:
     st.header("Player Prop Bet Prediction")
@@ -611,7 +719,6 @@ with tab_props:
         st.session_state.players.append({})
 
     with st.form(key=f"p_form_{st.session_state.player_form_reset_key}"):
-        # each player lives inside an expander
         for i in range(len(st.session_state.players)):
             with st.expander(f"Player {i+1}", expanded=True):
                 c1, c2 = st.columns(2)
@@ -632,11 +739,9 @@ with tab_props:
                         [""] + SPORT_STATS[sport]["prop_types"],
                         key=f"pt_{i}_{st.session_state.player_form_reset_key}",
                     )
-                    # generic label for line / option
                     line_lbl = "Prop line/option * (e.g., 25.5, KO/TKO, Yes, 2.5, 3)"
                     line = st.text_input(line_lbl, key=f"line_{i}_{st.session_state.player_form_reset_key}")
 
-                    # if the prop is numeric we need Over/Under side
                     if pt and ("Over/Under" in pt or "Total" in pt):
                         side = st.selectbox("Bet side *", ["Over", "Under"],
                                             key=f"side_{i}_{st.session_state.player_form_reset_key}")
@@ -652,7 +757,6 @@ with tab_props:
                     inj = st.selectbox("Injury status", ["", "Healthy", "Questionable", "Out"],
                                       key=f"inj_{i}_{st.session_state.player_form_reset_key}")
 
-                # store back into the list
                 st.session_state.players[i] = {
                     "name": pn,
                     "position": pos,
@@ -665,7 +769,6 @@ with tab_props:
                     "injury_status": inj or "Healthy",
                 }
 
-        # single stake for parlay
         parlay_stake = st.number_input("Parlay stake $", 0.0, step=0.01,
                                        key=f"parlay_stake_{st.session_state.player_form_reset_key}")
 
@@ -674,9 +777,6 @@ with tab_props:
         parlay_btn = st.form_submit_button("Predict Same‑Game Parlay")
         clear_btn = st.form_submit_button("Clear Players")
 
-    # -----------------------------------------------------------------
-    #   Button actions
-    # -----------------------------------------------------------------
     if add_btn:
         add_player()
         st.rerun()
@@ -701,7 +801,7 @@ with tab_props:
         else:
             good = []
             for pl in st.session_state.players:
-                if not (pl["name"] and pl["position"] and pl["prop_type"] and pl["over_under"]):
+                if not (pl["name"] and pl["prop_type"] and pl["position"] and pl["over_under"]):
                     continue
                 if pl["odds"] == 0:
                     st.error(f"Odds missing for player {pl['name']}.")
@@ -717,6 +817,7 @@ with tab_props:
         st.session_state.players = [{}]
         st.session_state.player_form_reset_key += 1
         st.rerun()
+
 
 # -------------------------------------------------------------
 # 10️⃣ Footer
