@@ -11,13 +11,7 @@ import matplotlib.pyplot as plt  # type: ignore
 # -------------------------------------------------------------
 st.set_page_config(
     page_title="Sports BetTracker",
-    layout="wide",
-    theme={
-        "primaryColor": "#D32F2F",       # bold red for odds/buttons
-        "backgroundColor": "#f0f2f6",
-        "secondaryBackgroundColor": "#ffffff",
-        "textColor": "#333333",
-    },
+    layout="wide"
 )
 
 st.image("sports-bettracker-logo.png", width=200,
