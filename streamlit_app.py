@@ -480,7 +480,9 @@ if st.session_state.get("run_prediction"):
                     st.write(f"• {line}")
 
                 # Show a small summary metric
-                st.metric(label="Margin", value=f"{abs(int(re.search(r'Margin: (\\d+)', prediction).group(1)))} pts" if re.search(r'Margin: (\\d+)', prediction) else "N/A")
+                margin_match = re.search(r'Margin: (\d+)', prediction)
+                margin_value = f"{abs(int(margin_match.group(1)))} pts" if margin_match else "N/A"
+                st.metric(label="Margin", value=margin_value)
 
         st.session_state.run_prediction = False  # reset flag
 
