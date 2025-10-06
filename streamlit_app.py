@@ -56,6 +56,7 @@ SPORT_STATS = {
         "player_positions": ["QB", "RB", "WR", "TE", "K"],
         "player_stats": ["Passing Yards", "Rushing Yards", "Receptions", "Touchdowns"],
         "prop_types": ["Passing Yards", "Rushing Yards", "Receptions", "Touchdowns"],
+        "score_types": ["Touchdown", "Field Goal", "Safety", "PAT"],
     },
     "Baseball": {
         "team_stats": ["Runs", "Hits", "Errors"],
@@ -83,6 +84,7 @@ SPORT_STATS = {
         ],
         "player_stats": ["Batting Average", "Home Runs", "RBIs", "Pitcher ERA"],
         "prop_types": ["Batting Average", "Home Runs", "RBIs", "Pitcher ERA"],
+        "score_types": ["Single", "Double", "Triple", "Home Run"],
     },
     "Basketball": {
         "team_stats": ["Points", "Rebounds", "Assists", "Field Goal %"],
@@ -90,6 +92,7 @@ SPORT_STATS = {
         "player_positions": ["PG", "SG", "SF", "PF", "C"],
         "player_stats": ["Points", "Rebounds", "Assists", "Field Goal %"],
         "prop_types": ["Points", "Rebounds", "Assists", "Field Goal %"],
+        "score_types": ["2-pt FG", "3-pt FG", "Free Throw"],
     },
     "Hockey": {
         "team_stats": ["Goals", "Shots on Goal", "Save %"],
@@ -97,6 +100,7 @@ SPORT_STATS = {
         "player_positions": ["C", "LW", "RW", "D", "G"],
         "player_stats": ["Goals", "Assists", "Shots on Goal", "Save %"],
         "prop_types": ["Goals", "Assists", "Shots on Goal", "Save %"],
+        "score_types": ["Even Strength", "Power Play", "Short-Handed", "Empty Net"],
     },
     "MMA": {
         "team_stats": ["Strikes", "Takedowns", "Submissions"],
@@ -120,6 +124,7 @@ SPORT_STATS = {
             "Round Betting",
             "Total Rounds Over/Under",
         ],
+        "score_types": ["KO/TKO", "Submission", "Decision", "DQ"],
     },
 }
 
@@ -336,9 +341,10 @@ def predict_team_outcome(team1: dict, team2: dict, sport_key: str, main_score_ty
 
         # ----- Assemble prediction string (winner first) -----
         winner = team1["name"] if t1_score > t2_score else team2["name"]
+        loser = team2["name"] if t1_score > t2_score else team1["name"]
         win_score = total_pred
         lose_score = loser_pred
-        pred_str = f"{winner} {win_score}-{lose_score}"
+        pred_str = f"{winner} {win_score} - {loser} {lose_score}"
 
         # winning margin
         margin = win_score - lose_score
@@ -395,6 +401,7 @@ def predict_team_outcome(team1: dict, team2: dict, sport_key: str, main_score_ty
             finish_round = int(np.clip(round(prop * max_rounds), 1, max_rounds))
 
         winner = team1["name"] if t1_score > t2_score else team2["name"]
+        loser = team2["name"] if t1_score > t2_score else team1["name"]
         win_prob = win_p1 if t1_score > t2_score else win_p2
 
         # Simple method‑of‑victory heuristic (same as player‑prop)
